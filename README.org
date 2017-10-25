@@ -1,0 +1,49 @@
+This is a CLI web/gopher/file browser inspired by [[https://en.wikipedia.org/wiki/Line_Mode_Browser][Line Mode Browser]].
+
+It combines [[http://pandoc.org/][pandoc]] with external downloaders such as [[https://curl.haxx.se/][curl]], adding
+support for Gopher directories and plaintext files, and invoking
+external applications (e.g., image and PDF viewers) depending on its
+configuration.
+
+It is intended to be used with ~rlwrap~ and ~tmux~ or ~screen~, and
+doesn't duplicate their functionality.
+
+* Commands
+
+- [q]uit, [b]ack, [f]orward, [h]elp, [re]load config
+- <number>: follow a link (or open the referenced file)
+- <number>?: show link/image URI
+- ?: show current URI
+- RET (empty): show the next 2/3 of a page, if pagination is enabled
+- <URI>: follow an URI, possibly relative to the current one
+- <shortcut> <query>: run a query using a shortcut defined in the
+  configuration (e.g., search)
+
+* Sample configuration
+
+#+BEGIN_SRC yaml
+externalViewers:
+  png: xdg-open
+  hs: emacsclient
+commands:
+  gopher: torify curl "${URI}"
+  ssh: scp "${URI_REGNAME}:${URI_PATH}" /dev/stdout
+defaultCommand: curl -4 -L "${URI}"
+shortcuts:
+  ddg: https://duckduckgo.com/lite/?q=
+  wt: https://en.m.wiktionary.org/w/index.php?search=
+  wp: https://en.m.wikipedia.org/wiki/Special:Search?search=
+  gp: gopher://gopherpedia.com:70/7/lookup?
+  vs: gopher://gopher.floodgap.com/7/v2/vs?
+paginate: true
+#+END_SRC
+
+* Screenshots
+
+[[https://defanor.uberspace.net/projects/pancake/gopher.png]]
+
+[[https://defanor.uberspace.net/projects/pancake/web-gnu.png]]
+
+[[https://defanor.uberspace.net/projects/pancake/web-wikipedia.png]]
+
+[[https://defanor.uberspace.net/projects/pancake/local-org.png]]
