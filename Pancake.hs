@@ -272,7 +272,6 @@ readInline (P.RawInline _ s) = pure . pure $ fromString s
 readInline (P.Link _ alt (url, title)) =
   case parseURIReference url of
     Just uri -> do
-      cnt <- storeLink uri
       a <- mapM readInline alt
       let t = case (title, a) of
             ("", []) -> [fromString url]
@@ -283,7 +282,8 @@ readInline (P.Link _ alt (url, title)) =
         -- fragment links are mostly useless here, at least for now.
         -- but still marking them as links, to avoid confusion.
         (URI "" Nothing "" "" _) -> pure $ map (Fg DullCyan) t
-        _ -> pure $ map (Fg Cyan) t ++ [Fg Blue (mconcat ["[", fromString $ show cnt, "]"])]
+        _ -> storeLink uri >>=
+             \cnt -> pure $ map (Fg Cyan) t ++ [Fg Blue (mconcat ["[", fromString $ show cnt, "]"])]
     Nothing -> pure . pure $ fromString title
 readInline (P.Image attr alt (url, title)) = do
   asLink <- readInline (P.Link attr alt (url, title))
