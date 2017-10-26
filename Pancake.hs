@@ -41,6 +41,7 @@ import qualified Data.ByteString.UTF8 as BSUTF8
 import Control.Exception
 import Text.Pandoc.Readers.Plain
 import Text.Pandoc.Readers.Gopher
+import Control.Applicative
 
 
 -- * Document reading
@@ -102,20 +103,22 @@ readDoc cmd uri = do
   let reader = case (uriScheme uri, takeExtension $ uriPath uri) of
         -- some exceptions and special cases (might be better to make
         -- this configurable)
-        ("http:", ".php") -> P.getReader "html"
-        ("https:", ".php") -> P.getReader "html"
-        ("http:", "") -> P.getReader "html"
-        ("https:", "") -> P.getReader "html"
-        ("gopher:", "") -> pure . P.StringReader . const $ pure . readGopher
-        (_, "") -> pure . P.StringReader . const $ pure . readPlain
-        (_, ".txt") -> pure . P.StringReader . const $ pure . readPlain
-        (_, ".md") -> P.getReader "markdown"
+        ("http:", ".php") -> html
+        ("https:", ".php") -> html
+        ("http:", "") -> html
+        ("https:", "") -> html
         ("gopher:", ext) -> case splitDirectories $ uriPath uri of
-          ("/":"0":_) -> pure . P.StringReader . const $ pure . readPlain
-          ("/":"1":_) -> pure . P.StringReader . const $ pure . readGopher
-          ("/":"h":_) -> P.getReader "html"
-          _ -> P.getReader $ tail ext
-        (_, ext) -> P.getReader $ tail ext
+          ("/":"1":_) -> gopher
+          ("/":"h":_) -> html
+          -- "0" should indicate plain text, but it's also the most
+          -- suitable option for non-html markup. Not sure about this
+          -- approach, but it's similar to ignoring HTTP content-type,
+          -- and will do for now: better to render documents nicely
+          -- when possible.
+          ("/":"0":_) -> byExtension ext <|> plain
+          -- unknown or unrecognized item type
+          _ -> byExtension ext <|> gopher
+        (_, ext) -> byExtension ext <|> plain
       cols = maybe 80 id $ TI.getCapability term TI.termColumns
       opts = def { P.readerColumns = cols }
   case reader of
@@ -132,6 +135,14 @@ readDoc cmd uri = do
           case r of
             Left err -> putStrLn (show err) >> pure Nothing
             Right (doc, _) -> pure $ pure doc
+  where
+    html = P.getReader "html"
+    plain = pure . P.StringReader . const $ pure . readPlain
+    gopher = pure . P.StringReader . const $ pure . readGopher
+    byExtension "" = Left "No extension"
+    byExtension ".md" = P.getReader "markdown"
+    byExtension ".txt" = pure . P.StringReader . const $ pure . readPlain
+    byExtension ext = P.getReader $ tail ext
 
 
 -- * Rendering
