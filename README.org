@@ -5,8 +5,9 @@ support for Gopher directories and plaintext files, and invoking
 external applications (e.g., image and PDF viewers) depending on its
 configuration.
 
-It is intended to be used with ~rlwrap~ and ~tmux~ or ~screen~, and
-doesn't duplicate their functionality.
+User interaction capabilities are rather basic, as it is intended to
+normally be combined with software that provides better user
+interfaces -- such as emacs, rlwrap, tmux, screen.
 
 * Commands
 
@@ -44,6 +45,4 @@ paginate: true
 
 [[https://defanor.uberspace.net/projects/pancake/web-gnu.png]]
 
-[[https://defanor.uberspace.net/projects/pancake/web-wikipedia.png]]
-
-[[https://defanor.uberspace.net/projects/pancake/local-org.png]]
+[[https://defanor.uberspace.net/projects/pancake/emacs.png]]

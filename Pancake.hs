@@ -42,6 +42,14 @@ import Control.Exception
 import Text.Pandoc.Readers.Plain
 import Text.Pandoc.Readers.Gopher
 import Control.Applicative
+import qualified System.IO as SIO
+
+
+-- | Prints a line into stderr.
+putErrLn :: MonadIO m => String -> m ()
+putErrLn s = liftIO $ do
+  SIO.hPutStrLn SIO.stderr s
+  SIO.hFlush SIO.stderr
 
 
 -- * Document reading
@@ -55,7 +63,7 @@ retrieve :: String
          -> IO BS.ByteString
          -- ^ Document contents.
 retrieve cmd uri = do
-  putStrLn $ "Retrieving " ++ show uri
+  putErrLn $ "Retrieving " ++ show uri
   curEnv <- getEnvironment
   let envAuthority = maybe [] (\x -> [ ("URI_USERINFO", uriUserInfo x)
                                      , ("URI_REGNAME", uriRegName x)
@@ -69,24 +77,26 @@ retrieve cmd uri = do
                     : curEnv
                     ++ envAuthority
   handle (\(e :: SomeException) ->
-            putStrLn (concat ["Failed to run `", cmd, "`: ", show e])
+            putErrLn (concat ["Failed to run `", cmd, "`: ", show e])
             >> pure BS.empty) $
     withCreateProcess ((shell cmd) { env = Just environment
                                    , std_out = CreatePipe
                                    , std_err = CreatePipe }) $
     \_ stdout stderr ph -> case stdout of
-      Nothing -> putStrLn "No stdout" >> pure BS.empty
+      Nothing -> putErrLn "No stdout" >> pure BS.empty
       Just stdout' -> do
         hSetBinaryMode stdout' True
         out <- BS.hGetContents stdout'
         ec <- waitForProcess ph
-        when (ec /= ExitSuccess) $ do
-          putStrLn $ concat ["An error occured. Exit code: ", show ec]
+        if (ec /= ExitSuccess)
+          then do
+          putErrLn $ concat ["An error occured. Exit code: ", show ec]
           case stderr of
             Nothing -> pure ()
             Just stderr' -> do
               err <- BS.hGetContents stderr'
-              BS.putStrLn $ BS.concat ["stderr: ", err]
+              putErrLn $ "stderr:\n" ++ BS.unpack err
+          else putErrLn $ show uri
         pure out
 
 -- | Reads a document: retrieves it and parses into a Pandoc
@@ -122,18 +132,18 @@ readDoc cmd uri = do
       cols = maybe 80 id $ TI.getCapability term TI.termColumns
       opts = def { P.readerColumns = cols }
   case reader of
-    Left err -> putStrLn err >> pure Nothing
+    Left err -> putErrLn err >> pure Nothing
     Right reader' ->
       case reader' of
         P.StringReader f -> do
           r <- f opts $ BSUTF8.toString out
           case r of
-            Left err -> putStrLn (show err) >> pure Nothing
+            Left err -> putErrLn (show err) >> pure Nothing
             Right doc -> pure $ pure doc
         P.ByteStringReader f -> do
           r <- f opts $ BL.fromStrict out
           case r of
-            Left err -> putStrLn (show err) >> pure Nothing
+            Left err -> putErrLn (show err) >> pure Nothing
             Right (doc, _) -> pure $ pure doc
   where
     html = P.getReader "html"
@@ -281,9 +291,10 @@ readInline (P.Link _ alt (url, title)) =
       case uri of
         -- fragment links are mostly useless here, at least for now.
         -- but still marking them as links, to avoid confusion.
-        (URI "" Nothing "" "" _) -> pure $ map (Fg DullCyan) t
+        (URI "" Nothing "" "" _) -> pure $ map (Fg Blue) t
         _ -> storeLink uri >>=
-             \cnt -> pure $ map (Fg Cyan) t ++ [Fg Blue (mconcat ["[", fromString $ show cnt, "]"])]
+             \cnt -> pure $ map (Fg Cyan) t ++
+                     [Fg Blue (mconcat ["[", fromString $ show cnt, "]"])]
     Nothing -> pure . pure $ fromString title
 readInline (P.Image attr alt (url, title)) = do
   asLink <- readInline (P.Link attr alt (url, title))
@@ -409,7 +420,7 @@ loadConfig = do
       c <- decodeFile configPath
       case c of
         Just config -> pure config
-        Nothing -> putStrLn "Failed to read the configuration, using defaults" >> pure def
+        Nothing -> putErrLn "Failed to read the configuration, using defaults" >> pure def
       else encodeFile configPath (def :: Config) >> pure def
   modify $ \s -> s {conf = c}
 
@@ -439,6 +450,7 @@ data LoopState = LS { history :: Sliding (URI, P.Pandoc)
                     , display :: Sliding (Colored String)
                     , links :: [URI]
                     , conf :: Config
+                    , embedded :: Bool
                     } deriving (Show)
 
 -- | Prints rendered lines.
@@ -447,22 +459,47 @@ showLines ls = liftIO $ do
   term <- getTerm
   mapM_ (\s -> printColoredS term s >> putChar '\n') ls
 
+-- | Prints rendered lines as s-expressions.
+showSexps :: MonadIO m => [Colored String] -> StateT LoopState m ()
+showSexps l = liftIO $ do
+  -- would be nicer to use some library for this, but they tend to be
+  -- abandoned, and the task is simple enough to do it here
+  putStrLn $ "( " ++ intercalate " " (map (\x -> concat ["(", showSexp x, ")"]) l) ++ " )"
+  SIO.hFlush SIO.stdout
+  where
+    showSexp :: Colored String -> String
+    -- no need for nils since the pairs are flattened
+    showSexp Nil = ""
+    showSexp (Value x) = concat ["\"", concatMap escape x, "\""]
+      where escape '\\' = "\\\\"
+            escape '"' = "\\\""
+            escape other = pure other
+    showSexp (Style s c) = concat ["(style ", show s, " ", showSexp c, ")"]
+    showSexp (Unstyle s c) = concat ["(unstyle ", show s, " ", showSexp c, ")"]
+    showSexp (Fg clr c) = concat ["(fg (", show clr, ") ", showSexp c, ")"]
+    showSexp (Bg clr c) = concat ["(bg (", show clr, ") ", showSexp c, ")"]
+    -- pairs are not important here, flattening at once
+    showSexp (Pair x y) = concat [showSexp x, " ", showSexp y]
+
 -- | Renders a parsed document.
 renderDoc :: MonadIO m => P.Pandoc -> StateT LoopState m ()
 renderDoc (P.Pandoc _ blocks) = do
   term <- liftIO TI.setupTermFromEnv
   st <- get
   let cols = maybe 80 id $ TI.getCapability term TI.termColumns
-      rows = maybe 25 id (TI.getCapability term TI.termLines) - 1
-      textLines = rights l
-      (shownLines, nextLines) =
-        if paginate (conf st)
-        then splitAt rows textLines
-        else (textLines, [])
       l = runRenderer cols $ renderBlocks blocks
-  showLines shownLines
-  modify (\s -> s { links = lefts l
-                  , display = ([], shownLines, nextLines )})
+      textLines = rights l
+  modify (\s -> s { links = lefts l })
+  if embedded st
+    then showSexps textLines
+    else do
+    let rows = maybe 25 id (TI.getCapability term TI.termLines) - 1
+        (shownLines, nextLines) =
+          if paginate (conf st)
+          then splitAt rows textLines
+          else (textLines, [])
+    showLines shownLines
+    modify (\s -> s { display = ([], shownLines, nextLines) })
 
 -- | Evaluates user commands.
 command :: MonadIO m => Command -> StateT LoopState m ()
@@ -488,7 +525,7 @@ command (GoTo u') = do
         let tmpPath = dir </> (takeFileName $ uriPath u)
         handle
           (\(e :: SomeException) ->
-             putStrLn (concat ["Failed to open `", tmpPath, "` with `" , cmd, "`: ", show e])) $ do
+             putErrLn (concat ["Failed to open `", tmpPath, "` with `" , cmd, "`: ", show e])) $ do
           createDirectoryIfMissing True dir
           BS.writeFile tmpPath d
           callCommand $ concat [ev, " ", tmpPath]
@@ -504,21 +541,21 @@ command (Follow i) = do
   st <- get
   if length (links st) > i
     then command (GoTo $ links st !! i)
-    else liftIO $ putStrLn "No such link"
+    else liftIO $ putErrLn "No such link"
 command Back = do
   st <- get
   case history st of
     (p@(_, d):prev, cur, next) -> do
       renderDoc d
       modify $ \s -> s { history = (prev, [p], cur ++ next) }
-    _ -> liftIO $ putStrLn "There's nothing back there"
+    _ -> liftIO $ putErrLn "There's nothing back there"
 command Forward = do
   st <- get
   case history st of
     (prev, cur, n@(_, d):next) -> do
       renderDoc d
       modify $ \s -> s { history = (cur ++ prev, [n], next) }
-    _ -> liftIO $ putStrLn "Nowhere to go"
+    _ -> liftIO $ putErrLn "Nowhere to go"
 command More = do
   st <- get
   case display st of
@@ -531,23 +568,23 @@ command More = do
       showLines newLines
       modify (\s -> s { display = (reverse cur ++ prev, newLines, next') })
       pure ()
-command Reload = liftIO $ putStrLn "Not implemented yet (TODO)"
+command Reload = liftIO $ putErrLn "Not implemented yet (TODO)"
 command Help = do
   st <- get
   liftIO $ do
-    putStrLn "[q]uit, [b]ack, [f]orward, [h]elp, [re]load config"
-    putStrLn "type a number to follow a link, \"<number>?\" to print its URI"
-    putStrLn "type an URI (absolute or relative) to open it"
-    when (paginate $ conf st) $ putStrLn "RET to scroll"
+    putErrLn "[q]uit, [b]ack, [f]orward, [h]elp, [re]load config"
+    putErrLn "type a number to follow a link, \"<number>?\" to print its URI"
+    putErrLn "type an URI (absolute or relative) to open it"
+    when (paginate $ conf st) $ putErrLn "RET to scroll"
 command (Show n) = do
   st <- get
-  liftIO . putStrLn $ if length (links st) > n
+  liftIO . putErrLn $ if length (links st) > n
                       then show $ links st !! n
                       else "No such link"
 command ShowCurrent = do
   st <- get
   case history st of
-    (_, [(u, _)], _) -> liftIO $ putStrLn $ show u
+    (_, [(u, _)], _) -> liftIO $ putErrLn $ show u
     _ -> pure ()
 command (Shortcut u q) = command . GoTo . fromJust . parseURI $
   u ++ escapeURIString isReserved q
@@ -585,5 +622,9 @@ eventLoop = do
 
 -- | Loads configuration and runs 'eventLoop'.
 main :: IO ()
-main = runStateT (loadConfig >> eventLoop) (LS ([],[],[]) ([],[],[]) [] def)
-       >> pure ()
+main = do
+  args <- getArgs
+  insideEmacs <- lookupEnv "INSIDE_EMACS"
+  _ <- runStateT (loadConfig >> eventLoop) $
+    LS ([],[],[]) ([],[],[]) [] def (isJust insideEmacs || "--embedded" `elem` args)
+  pure ()
