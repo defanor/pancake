@@ -1,6 +1,11 @@
 name:                pancake
 version:             0.1.0.1
 synopsis:            A CLI web/gopher/file browser
+description:         Pancake is a CLI web/gopher/file browser inspired
+                     by Line Mode Browser. It relies on pandoc for
+                     parsing, on curl and other external applications
+                     for data loading, on emacs and other applications
+                     to provide user interfaces.
 tested-with:         GHC == 8.0.1
 license:             GPL-3
 license-file:        LICENSE
@@ -14,6 +19,9 @@ extra-source-files:  ChangeLog.md
                    , README.org
                    , pancake.el
 cabal-version:       >=1.10
+source-repository head
+  type:     git
+  location: git://github.com/defanor/pancake.git
 
 executable pancake
   main-is:             Pancake.hs
