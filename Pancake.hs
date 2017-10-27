@@ -151,6 +151,8 @@ readDoc cmd uri = do
     gopher = pure . P.StringReader . const $ pure . readGopher
     byExtension "" = Left "No extension"
     byExtension ".md" = P.getReader "markdown"
+    byExtension ".ltx" = P.getReader "latex"
+    byExtension ".tex" = P.getReader "latex"
     byExtension ".txt" = pure . P.StringReader . const $ pure . readPlain
     byExtension ext = P.getReader $ tail ext
 
