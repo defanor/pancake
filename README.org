@@ -6,8 +6,8 @@ external applications (e.g., image and PDF viewers) depending on its
 configuration.
 
 User interaction capabilities are rather basic, as it is intended to
-normally be combined with software that provides better user
-interfaces -- such as emacs, rlwrap, tmux, screen.
+be combined with software that provides better user interfaces -- such
+as emacs, rlwrap, tmux, screen.
 
 * Commands
 
@@ -19,6 +19,9 @@ interfaces -- such as emacs, rlwrap, tmux, screen.
 - <URI>: follow an URI, possibly relative to the current one
 - <shortcut> <query>: run a query using a shortcut defined in the
   configuration (e.g., search)
+
+pancake-mode provides additional aliases, see built-in emacs
+documentation (~C-h m~) for those.
 
 * Sample configuration
 

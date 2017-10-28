@@ -250,15 +250,32 @@
   (interactive)
   (funcall (pancake-input (gui-get-primary-selection))))
 
+(defun pancake-process-send (line)
+  "Send LINE to the pancake process."
+  (process-send-string pancake-process (concat line "\n")))
+
+(defun pancake-go-backward ()
+  "Go backward in history."
+  (interactive)
+  (pancake-process-send "b"))
+
+(defun pancake-go-forward ()
+  "Go forward in history."
+  (interactive)
+  (pancake-process-send "f"))
+
+(defun pancake-quit ()
+  "Quit pancake."
+  (interactive)
+  (pancake-process-send "q"))
+
 (defun pancake-input (string)
   "Pancake input handler: opens minibuffer for input.
 Sets the initial contents to STRING, reads the rest, and passes
 it to `pancake-process' as input."
   (lambda ()
     (interactive)
-    (process-send-string
-     pancake-process
-     (concat (read-from-minibuffer "" string) "\n"))))
+    (pancake-process-send (read-from-minibuffer "" string))))
 
 (defvar pancake-mode-map
   (let ((map (make-sparse-keymap))
@@ -271,6 +288,9 @@ it to `pancake-process' as input."
     (define-key map (kbd "C-y") 'pancake-yank)
     (define-key map (kbd "<mouse-2>") 'pancake-yank-primary)
     (define-key map (kbd "C-c C-c") 'pancake-interrupt)
+    (define-key map (kbd "B") 'pancake-go-backward)
+    (define-key map (kbd "F") 'pancake-go-forward)
+    (define-key map (kbd "Q") 'pancake-quit)
     map)
   "Keymap for `pancake-mode'.")
 
