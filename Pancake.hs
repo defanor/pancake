@@ -498,7 +498,7 @@ renderDoc (P.Pandoc _ blocks) = do
   term <- liftIO TI.setupTermFromEnv
   st <- get
   let cols = maybe 80 id $ TI.getCapability term TI.termColumns
-      l = runRenderer cols $ renderBlocks blocks
+      l = runRenderer cols $ mapM_ renderBlock blocks
       textLines = rights l
   modify (\s -> s { links = lefts l })
   if embedded st
