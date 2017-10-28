@@ -36,6 +36,7 @@ shortcuts:
   wp: https://en.m.wikipedia.org/wiki/Special:Search?search=
   gp: gopher://gopherpedia.com:70/7/lookup?
   vs: gopher://gopher.floodgap.com/7/v2/vs?
+historyDepth: 100
 paginate: true
 #+END_SRC
 

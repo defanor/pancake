@@ -386,8 +386,11 @@ data Config = Config { commands :: M.Map String String
                      -- ^ Shortcuts to use (search engines,
                      -- dictionaries, etc).
                      , paginate :: Bool
-                     -- ^ Enable pagination; print everything at once
-                     -- otherwise.
+                     -- ^ Enable pagination in non-embedded mode;
+                     -- print everything at once otherwise.
+                     , historyDepth :: Int
+                     -- ^ The amount of history entries (into either
+                     -- direction) to keep.
                      } deriving (Generic, Show)
 
 -- | For configuration parsing
@@ -413,6 +416,7 @@ instance Default Config where
                  , ("gp", "gopher://gopherpedia.com:70/7/lookup?")
                  , ("vs", "gopher://gopher.floodgap.com/7/v2/vs?")]
                , paginate = True
+               , historyDepth = 100
                }
 
 -- | Loads configuration from an XDG config directory.
@@ -533,7 +537,8 @@ command (GoTo u') = do
         let tmpPath = dir </> (takeFileName $ uriPath u)
         handle
           (\(e :: SomeException) ->
-             putErrLn (concat ["Failed to open `", tmpPath, "` with `" , cmd, "`: ", show e])) $ do
+             putErrLn (concat ["Failed to open `", tmpPath, "` with `"
+                              , cmd, "`: ", show e])) $ do
           createDirectoryIfMissing True dir
           BS.writeFile tmpPath d
           callCommand $ concat [ev, " ", tmpPath]
@@ -544,7 +549,8 @@ command (GoTo u') = do
       renderDoc doc
       modify $ \s ->
         let (prev, cur, _) = history s
-        in s { history = ( cur ++ prev, [(u, doc)], []) }
+        in s { history = ( (take (historyDepth $ conf s) $ cur ++ prev)
+                         , [(u, doc)], []) }
 command (Follow i) = do
   st <- get
   if length (links st) > i
@@ -555,14 +561,16 @@ command Back = do
   case history st of
     (p@(_, d):prev, cur, next) -> do
       renderDoc d
-      modify $ \s -> s { history = (prev, [p], cur ++ next) }
+      modify $ \s ->
+        s { history = ( prev, [p], take (historyDepth $ conf s) $ cur ++ next) }
     _ -> liftIO $ putErrLn "There's nothing back there"
 command Forward = do
   st <- get
   case history st of
     (prev, cur, n@(_, d):next) -> do
       renderDoc d
-      modify $ \s -> s { history = (cur ++ prev, [n], next) }
+      modify $ \s ->
+        s { history = (take (historyDepth $ conf s ) $ cur ++ prev, [n], next) }
     _ -> liftIO $ putErrLn "Nowhere to go"
 command More = do
   st <- get
