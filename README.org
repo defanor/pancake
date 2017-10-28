@@ -9,6 +9,17 @@ User interaction capabilities are rather basic, as it is intended to
 be combined with software that provides better user interfaces -- such
 as emacs, rlwrap, tmux, screen.
 
+* Installation
+
+Use ~cabal install~ to install pancake, ~M-x package-install-file RET
+/path/to/pancake.el RET~ to install its emacs interface. To set it as
+your default emacs browser:
+
+#+BEGIN_SRC elisp
+(require 'pancake)
+(setq browse-url-browser-function 'pancake-browse-url)
+#+END_SRC
+
 * Commands
 
 - [q]uit, [b]ack, [f]orward, [h]elp, [re]load config
@@ -42,6 +53,21 @@ shortcuts:
 historyDepth: 100
 paginate: true
 #+END_SRC
+
+* Excluded features
+
+- Usage of content types reported by network protocols: HTTP content
+  types are ignored, Gopher item types are used only loosely and
+  indirectly, and pancake mostly relies on URIs for format detection.
+  Usually it works, but can be improved -- though that would slightly
+  complicate both the configuration and the codebase, which may be not
+  worth it.
+- Semantic markup for embedding: it might be useful to provide
+  semantic markup to ~pancake-mode~ (and for embedding in general) in
+  order to e.g. buttonize links (and embed images, perhaps), but it's
+  tricky to draw a line between that and just serializing pandoc
+  structures, skipping the rendering altogether. Simplicity would
+  suffer, too.
 
 * Screenshots
 
