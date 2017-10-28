@@ -406,7 +406,7 @@ instance Default Config where
                  , ("gopher", "curl \"${URI}\"")]
                , defaultCommand = "curl -4 -L \"${URI}\""
                , externalViewers = M.fromList $
-                 map (flip (,) "emacsclient") ["hs", "cabal", "c", "h", "el", "scm", "idr"]
+                 map (flip (,) "emacsclient -n") ["hs", "cabal", "c", "h", "el", "scm", "idr"]
                  ++ map (flip (,) "xdg-open") ["svg", "png", "jpg", "jpeg", "gif", "pdf"]
                , shortcuts = M.fromList
                  [ ("ddg", "https://duckduckgo.com/lite/?q=")
