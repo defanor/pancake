@@ -393,7 +393,7 @@ data Config = Config { commands :: M.Map String String
                      -- direction) to keep.
                      } deriving (Generic, Show)
 
--- | For configuration parsing
+-- | For configuration parsing.
 instance FromJSON Config
 -- | For configuration writing, particularly that of default
 -- configuration if it is missing.
@@ -403,8 +403,7 @@ instance ToJSON Config
 instance Default Config where
   def = Config { commands = M.fromList
                  [ ("ssh", "scp \"${URI_REGNAME}:${URI_PATH}\" /dev/stdout")
-                 -- gopher://bitreich.org:70/1/onion
-                 , ("gopher", "torify curl \"${URI}\"")]
+                 , ("gopher", "curl \"${URI}\"")]
                , defaultCommand = "curl -4 -L \"${URI}\""
                , externalViewers = M.fromList $
                  map (flip (,) "emacsclient") ["hs", "cabal", "c", "h", "el", "scm", "idr"]
