@@ -235,22 +235,36 @@
              (buffer-live-p (process-buffer process)))
     (kill-buffer (process-buffer process))))
 
-(defun pancake-input (char)
+(defun pancake-yank ()
+  "Insert a string."
+  (interactive)
+  (funcall (pancake-input (current-kill 0))))
+
+(defun pancake-yank-primary ()
+  "Insert a string from the primary selection."
+  (interactive)
+  (funcall (pancake-input (gui-get-primary-selection))))
+
+(defun pancake-input (string)
   "Pancake input handler: opens minibuffer for input.
-Sets the initial contents to CHAR, reads the rest,
-and passes it to `pancake-process' as input."
+Sets the initial contents to STRING, reads the rest, and passes
+it to `pancake-process' as input."
   (lambda ()
     (interactive)
     (process-send-string
      pancake-process
-     (concat (read-from-minibuffer "" (char-to-string char)) "\n"))))
+     (concat (read-from-minibuffer "" string) "\n"))))
 
 (defvar pancake-mode-map
   (let ((map (make-sparse-keymap))
-        (chars (append (number-sequence ?0 ?9)
-                       (number-sequence ?a ?z))))
+        (chars (cons ??
+                     (append (number-sequence ?0 ?9)
+                             (number-sequence ?a ?z)))))
     (dolist (char chars)
-      (define-key map (char-to-string char) (pancake-input char)))
+      (let ((str (char-to-string char)))
+        (define-key map (kbd str) (pancake-input str))))
+    (define-key map (kbd "C-y") 'pancake-yank)
+    (define-key map (kbd "<mouse-2>") 'pancake-yank-primary)
     map)
   "Keymap for `pancake-mode'.")
 
