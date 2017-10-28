@@ -299,7 +299,7 @@ readInline (P.Link _ alt (url, title)) =
       case uri of
         -- fragment links are mostly useless here, at least for now.
         -- but still marking them as links, to avoid confusion.
-        (URI "" Nothing "" "" _) -> pure $ map (Fg Blue) t
+        (URI "" Nothing "" "" _) -> pure $ map (Fg Magenta) t
         _ -> storeLink uri >>=
              \cnt -> pure $ map (Fg Cyan) t ++
                      [Fg Blue (mconcat ["[", fromString $ show cnt, "]"])]
