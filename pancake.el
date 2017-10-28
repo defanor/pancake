@@ -235,6 +235,11 @@
              (buffer-live-p (process-buffer process)))
     (kill-buffer (process-buffer process))))
 
+(defun pancake-interrupt ()
+  "Send SIGINT to the process."
+  (interactive)
+  (interrupt-process pancake-process))
+
 (defun pancake-yank ()
   "Insert a string."
   (interactive)
@@ -257,14 +262,15 @@ it to `pancake-process' as input."
 
 (defvar pancake-mode-map
   (let ((map (make-sparse-keymap))
-        (chars (cons ??
-                     (append (number-sequence ?0 ?9)
-                             (number-sequence ?a ?z)))))
+        (chars (append (list ?? ?. ?/)
+                       (number-sequence ?0 ?9)
+                       (number-sequence ?a ?z))))
     (dolist (char chars)
       (let ((str (char-to-string char)))
         (define-key map (kbd str) (pancake-input str))))
     (define-key map (kbd "C-y") 'pancake-yank)
     (define-key map (kbd "<mouse-2>") 'pancake-yank-primary)
+    (define-key map (kbd "C-c C-c") 'pancake-interrupt)
     map)
   "Keymap for `pancake-mode'.")
 

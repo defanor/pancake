@@ -81,7 +81,8 @@ retrieve cmd uri = do
             >> pure BS.empty) $
     withCreateProcess ((shell cmd) { env = Just environment
                                    , std_out = CreatePipe
-                                   , std_err = CreatePipe }) $
+                                   , std_err = CreatePipe
+                                   , delegate_ctlc = True }) $
     \_ stdout stderr ph -> case stdout of
       Nothing -> putErrLn "No stdout" >> pure BS.empty
       Just stdout' -> do
