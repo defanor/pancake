@@ -118,15 +118,15 @@ readDoc cmd uri = do
         ("https:", ".php") -> html
         ("http:", "") -> html
         ("https:", "") -> html
-        ("gopher:", ext) -> case splitDirectories $ uriPath uri of
-          ("/":"1":_) -> gopher
-          ("/":"h":_) -> html
+        ("gopher:", ext) -> case uriPath uri of
+          ('/':'1':_) -> gopher
+          ('/':'h':_) -> html
           -- "0" should indicate plain text, but it's also the most
           -- suitable option for non-html markup. Not sure about this
           -- approach, but it's similar to ignoring HTTP content-type,
           -- and will do for now: better to render documents nicely
           -- when possible.
-          ("/":"0":_) -> byExtension ext <|> plain
+          ('/':'0':_) -> byExtension ext <|> plain
           -- unknown or unrecognized item type
           _ -> byExtension ext <|> gopher
         (_, ext) -> byExtension ext <|> plain
