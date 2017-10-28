@@ -16,14 +16,8 @@ import Text.Pandoc.Definition
 import Text.Pandoc.Error
 import Text.Parsec
 import Text.Parsec.String
+import Text.Pandoc.Readers.Plain
 
--- | Translates a text line into a list of 'Inline' elements suitable
--- for further processing.
-lineToInlines :: String -> [Inline]
-lineToInlines [] = []
-lineToInlines (' ':rest) = Space : lineToInlines rest
-lineToInlines s = let (cur, next) = break (== ' ') s
-                  in Str cur : lineToInlines next
 
 -- | UNASCII   ::= ASCII - [Tab CR-LF NUL].
 unascii :: Parser Char

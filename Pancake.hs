@@ -237,12 +237,17 @@ fitLines maxLen inlineBits = map mconcat $ map reverse $ fitWords [] 0 inlineBit
     -- a new line
     fitWords _ 0 (w:ws) = fitWords [w] (length $ asString w) ws
     -- add a word to a line
-    fitWords curLine curLen (w:ws) = let wLen = length (asString w) in
-      if curLen + wLen <= maxLen
-      then fitWords (w:curLine) (curLen + wLen) ws
-      else curLine : fitWords [] 0 (case w of
-                                              " " -> ws
-                                              _ -> (w:ws))
+    fitWords curLine curLen (w:ws) = let wLen = length (asString w)
+                                         spaceAhead = case ws of
+                                           (" " : _) -> True
+                                           _ -> False
+      in if curLen + wLen <= maxLen
+         then fitWords (w:curLine) (curLen + wLen) $
+              -- if there's an unnecessary space ahead, skip it
+              if (curLen + wLen + 1 > maxLen && spaceAhead)
+              then tail ws
+              else ws
+         else curLine : fitWords [] 0 (w:ws)
     -- end, no words pending
     fitWords _ 0 [] = []
     -- end, with words pending
