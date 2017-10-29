@@ -43,6 +43,7 @@ import Text.Pandoc.Readers.Plain
 import Text.Pandoc.Readers.Gopher
 import Control.Applicative
 import qualified System.IO as SIO
+import Data.Char
 
 
 -- | Prints a line into stderr.
@@ -111,7 +112,7 @@ readDoc :: String
 readDoc cmd uri = do
   out <- retrieve cmd uri
   term <- TI.setupTermFromEnv
-  let reader = case (uriScheme uri, takeExtension $ uriPath uri) of
+  let reader = case (uriScheme uri, map toLower $ takeExtension $ uriPath uri) of
         -- some exceptions and special cases (might be better to make
         -- this configurable)
         ("http:", ".php") -> html
@@ -152,6 +153,7 @@ readDoc cmd uri = do
     gopher = pure . P.StringReader . const $ pure . readGopher
     byExtension "" = Left "No extension"
     byExtension ".md" = P.getReader "markdown"
+    byExtension ".htm" = html
     byExtension ".ltx" = P.getReader "latex"
     byExtension ".tex" = P.getReader "latex"
     byExtension ".txt" = pure . P.StringReader . const $ pure . readPlain
@@ -407,7 +409,9 @@ instance Default Config where
                , defaultCommand = "curl -4 -L \"${URI}\""
                , externalViewers = M.fromList $
                  map (flip (,) "emacsclient -n") ["hs", "cabal", "c", "h", "el", "scm", "idr"]
-                 ++ map (flip (,) "xdg-open") ["svg", "png", "jpg", "jpeg", "gif", "pdf"]
+                 ++ map (flip (,) "xdg-open") [ "svg", "png", "jpg", "jpeg", "gif", "pdf"
+                                              , "ogg", "ogv", "webm", "mp3", "mp4", "mkv"
+                                              , "mpeg", "wav" ]
                , shortcuts = M.fromList
                  [ ("ddg", "https://duckduckgo.com/lite/?q=")
                  , ("wp", "https://en.m.wikipedia.org/wiki/Special:Search?search=")
@@ -527,7 +531,7 @@ command (GoTo u') = do
   d <- liftIO $ do
     let ext = case takeExtension $ uriPath u of
           "" -> "html"
-          x -> tail x
+          x -> map toLower $ tail x
     case M.lookup ext (externalViewers $ conf st) of
       Nothing -> readDoc cmd u
       Just ev -> do
