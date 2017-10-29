@@ -37,7 +37,7 @@ pInfo = do
 -- entry.
 pLink :: Parser [Inline]
 pLink = do
-  t <- alphaNum
+  t <- anyChar
   name <- manyTill unascii tab
   selector <- manyTill unascii tab
   host <- manyTill unascii tab
@@ -51,8 +51,14 @@ pLastLine :: Parser ()
 -- sometimes LF is used instead of CRLF.
 pLastLine = optional (optional endOfLine *> char '.' *> endOfLine) *> eof
 
+-- | Parses end-of-line, skipping Gopher+ extensions if present.
+pEOL :: Parser ()
+pEOL = (endOfLine *> pure ())
+  <|> (tab >> char '+' >> manyTill anyChar endOfLine *> pure ())
+
+-- | Parses a directory.
 pDirEntries :: Parser [Inline]
-pDirEntries = concat <$> manyTill (choice [pInfo, pLink] <* endOfLine) pLastLine
+pDirEntries = concat <$> manyTill (choice [pInfo, pLink] <* pEOL) pLastLine
 
 -- | Reads Gopher directory entries, falls back to plain text on
 -- failure.
