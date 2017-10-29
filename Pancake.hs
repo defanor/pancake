@@ -107,48 +107,38 @@ readDoc :: String
         -- ^ Shell command to use for retrieval.
         -> URI
         -- ^ Document URI.
-        -> IO (Maybe P.Pandoc)
+        -> IO (Either P.PandocError P.Pandoc)
         -- ^ A parsed document.
 readDoc cmd uri = do
   out <- retrieve cmd uri
   term <- TI.setupTermFromEnv
-  let reader = case (uriScheme uri, map toLower $ takeExtension $ uriPath uri) of
-        -- some exceptions and special cases (might be better to make
-        -- this configurable)
-        ("http:", ext) -> http ext
-        ("https:", ext) -> http ext
-        ("gopher:", ext) -> case uriPath uri of
-          ('/':'1':_) -> gopher
-          ('/':'h':_) -> html
-          -- "0" should indicate plain text, but it's also the most
-          -- suitable option for non-html markup. Not sure about this
-          -- approach, but it's similar to ignoring HTTP content-type,
-          -- and will do for now: better to render documents nicely
-          -- when possible.
-          ('/':'0':_) -> byExtension ext <|> plain
-          -- unknown or unrecognized item type
-          _ -> byExtension ext <|> gopher
-        (_, ext) -> byExtension ext <|> plain
+  let reader = either (const plain) id $
+        case (uriScheme uri, map toLower $ takeExtension $ uriPath uri) of
+          -- some exceptions and special cases (might be better to make
+          -- this configurable)
+          ("http:", ext) -> http ext
+          ("https:", ext) -> http ext
+          ("gopher:", ext) -> case uriPath uri of
+            ('/':'1':_) -> gopher
+            ('/':'h':_) -> html
+            -- "0" should indicate plain text, but it's also the most
+            -- suitable option for non-html markup. Not sure about this
+            -- approach, but it's similar to ignoring HTTP content-type,
+            -- and will do for now: better to render documents nicely
+            -- when possible.
+            ('/':'0':_) -> byExtension ext
+            -- unknown or unrecognized item type
+            _ -> byExtension ext <|> gopher
+          (_, ext) -> byExtension ext
       cols = maybe 80 id $ TI.getCapability term TI.termColumns
       opts = def { P.readerColumns = cols }
   case reader of
-    Left err -> putErrLn err >> pure Nothing
-    Right reader' ->
-      case reader' of
-        P.StringReader f -> do
-          r <- f opts $ BSUTF8.toString out
-          case r of
-            Left err -> putErrLn (show err) >> pure Nothing
-            Right doc -> pure $ pure doc
-        P.ByteStringReader f -> do
-          r <- f opts $ BL.fromStrict out
-          case r of
-            Left err -> putErrLn (show err) >> pure Nothing
-            Right (doc, _) -> pure $ pure doc
+    P.StringReader f -> f opts $ BSUTF8.toString out
+    P.ByteStringReader f -> fmap fst <$> f opts (BL.fromStrict out)
   where
     http ext = byExtension ext <|> html
     html = P.getReader "html"
-    plain = pure . P.StringReader . const $ pure . readPlain
+    plain = P.StringReader . const $ pure . readPlain
     gopher = pure . P.StringReader . const $ pure . readGopher
     byExtension "" = Left "No extension"
     byExtension ".md" = P.getReader "markdown"
@@ -529,10 +519,16 @@ command (GoTo u') = do
       cmd = maybe (defaultCommand $ conf st) id (M.lookup (init $ uriScheme u) (commands $ conf st))
   d <- liftIO $ do
     let ext = case takeExtension $ uriPath u of
-          "" -> "html"
-          x -> map toLower $ tail x
+          ('.':xs) -> map toLower xs
+          other -> other
     case M.lookup ext (externalViewers $ conf st) of
-      Nothing -> readDoc cmd u
+      Nothing -> do
+        doc <- readDoc cmd u
+        case doc of
+          Left err -> do
+            putErrLn $ show err
+            pure mzero
+          Right r -> pure $ pure r
       Just ev -> do
         d <- retrieve cmd u
         dir <- getXdgDirectory XdgCache "pancake"
@@ -544,7 +540,7 @@ command (GoTo u') = do
           createDirectoryIfMissing True dir
           BS.writeFile tmpPath d
           callCommand $ concat [ev, " ", tmpPath]
-        pure Nothing
+        pure mzero
   case d of
     Nothing -> pure ()
     Just doc@(P.Pandoc _ _) -> do
