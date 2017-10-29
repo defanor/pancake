@@ -115,10 +115,8 @@ readDoc cmd uri = do
   let reader = case (uriScheme uri, map toLower $ takeExtension $ uriPath uri) of
         -- some exceptions and special cases (might be better to make
         -- this configurable)
-        ("http:", ".php") -> html
-        ("https:", ".php") -> html
-        ("http:", "") -> html
-        ("https:", "") -> html
+        ("http:", ext) -> http ext
+        ("https:", ext) -> http ext
         ("gopher:", ext) -> case uriPath uri of
           ('/':'1':_) -> gopher
           ('/':'h':_) -> html
@@ -148,6 +146,7 @@ readDoc cmd uri = do
             Left err -> putErrLn (show err) >> pure Nothing
             Right (doc, _) -> pure $ pure doc
   where
+    http ext = byExtension ext <|> html
     html = P.getReader "html"
     plain = pure . P.StringReader . const $ pure . readPlain
     gopher = pure . P.StringReader . const $ pure . readGopher
