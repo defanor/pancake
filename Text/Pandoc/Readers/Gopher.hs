@@ -23,6 +23,10 @@ import Text.Pandoc.Readers.Plain
 unascii :: Parser Char
 unascii = noneOf ['\t', '\n', '\r', '\0']
 
+-- | Creates a type prefix for directory entries.
+mkPrefix :: String -> [Inline]
+mkPrefix s = replicate (6 - length s) Space ++ [Str s, Space]
+
 -- | An informational directory entry.
 pInfo :: Parser [Inline]
 pInfo = do
@@ -31,7 +35,7 @@ pInfo = do
   _ <- manyTill unascii tab
   _ <- manyTill unascii tab
   _ <- many1 digit
-  pure $ lineToInlines info ++ [LineBreak]
+  pure $ mkPrefix "" ++ lineToInlines info ++ [LineBreak]
 
 -- | A file\/link (i.e., any other than informational) directory
 -- entry.
@@ -43,7 +47,16 @@ pLink = do
   host <- manyTill unascii tab
   port <- many1 digit
   let uri = concat ["gopher://", host, ":", port, "/", [t], selector]
-  pure [Link (name, [], []) (lineToInlines name) (uri, ""), LineBreak]
+      prefix = mkPrefix $ case t of
+        '0' -> "(text)"
+        '1' -> "(dir)"
+        'h' -> "(html)"
+        '9' -> "(bin)"
+        'I' -> "(img)"
+        's' -> "(snd)"
+        '7' -> "(srch)"
+        _   -> "(?)"
+  pure [Link (name, [], []) (prefix ++ lineToInlines name) (uri, ""), LineBreak]
 
 -- | Parses last line, with adjustments for what's used in the wild.
 pLastLine :: Parser ()
