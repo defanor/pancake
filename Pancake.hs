@@ -397,10 +397,11 @@ instance Default Config where
                  , ("gopher", "curl \"${URI}\"")]
                , defaultCommand = "curl -4 -L \"${URI}\""
                , externalViewers = M.fromList $
-                 map (flip (,) "emacsclient -n") ["hs", "cabal", "c", "h", "el", "scm", "idr"]
-                 ++ map (flip (,) "xdg-open") [ "svg", "png", "jpg", "jpeg", "gif", "pdf"
-                                              , "ogg", "ogv", "webm", "mp3", "mp4", "mkv"
-                                              , "mpeg", "wav" ]
+                 map (flip (,) "emacsclient -n \"${FILE}\"")
+                 ["hs", "cabal", "c", "h", "el", "scm", "idr"]
+                 ++ map (flip (,) "xdg-open \"${FILE}\"")
+                 [ "svg", "png", "jpg", "jpeg", "gif", "pdf", "ogg", "ogv"
+                 , "webm", "mp3", "mp4", "mkv", "mpeg", "wav" ]
                , shortcuts = M.fromList
                  [ ("ddg", "https://duckduckgo.com/lite/?q=")
                  , ("wp", "https://en.m.wikipedia.org/wiki/Special:Search?search=")
@@ -539,7 +540,12 @@ command (GoTo u') = do
                               , cmd, "`: ", show e])) $ do
           createDirectoryIfMissing True dir
           BS.writeFile tmpPath d
-          callCommand $ concat [ev, " ", tmpPath]
+          curEnv <- getEnvironment
+          ec <- withCreateProcess
+            ((shell ev) { env = Just (("FILE", tmpPath) : curEnv) }) $
+            \_ _ _ p -> waitForProcess p
+          when (ec /= ExitSuccess) $
+            putErrLn $ concat ["An error occured. Exit code: ", show ec]
         pure mzero
   case d of
     Nothing -> pure ()

@@ -38,8 +38,8 @@ documentation (~C-h m~) for those.
 
 #+BEGIN_SRC yaml
 externalViewers:
-  png: xdg-open
-  hs: emacsclient -n
+  png: xdg-open "${FILE}"
+  hs: emacsclient -n "${FILE}"
 commands:
   gopher: torify curl "${URI}"
   ssh: scp "${URI_REGNAME}:${URI_PATH}" /dev/stdout
