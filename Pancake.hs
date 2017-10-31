@@ -166,11 +166,14 @@ type Renderer a = WriterT [Either URI (Colored String)] (State RS) a
 -- | Runs a 'Renderer'.
 runRenderer :: Int
             -- ^ Column count (line width).
+            -> Int
+            -- ^ Link number to start with.
             -> Renderer a
             -- ^ A renderer.
             -> [Either URI (Colored String)]
             -- ^ Collected links and text lines.
-runRenderer cols r = snd $ fst $ runState (runWriterT r) (RS 0 0 False Nothing cols)
+runRenderer cols ls r = snd $ fst $ runState (runWriterT r)
+  (RS 0 ls False Nothing cols)
 
 -- | Stores a link, increasing the counter
 storeLink :: URI -> Renderer Int
@@ -213,6 +216,12 @@ indented strings = do
       modify (\s -> s { ordered = Just (n + 1) })
     (xs, _, _) -> tell $ map (Right . (fromString (replicate indent ' ') <>)) xs
 
+-- This may be unreliable, especially for resulting length estimation,
+-- but usually works. Maybe improve someday.
+-- | Returns a string as it would be shown on a dumb terminal.
+uncolored :: Colored String -> String
+uncolored s = showColoredS TermDumb s ""
+
 -- todo: deal with non-breaking spaces
 -- | Fits words into terminal lines of a given width.
 fitLines :: Int
@@ -223,13 +232,12 @@ fitLines :: Int
          -- ^ Fitted lines.
 fitLines maxLen inlineBits = map mconcat $ map reverse $ fitWords [] 0 inlineBits
   where
-    asString w = showColoredS TermDumb w ""
     -- handle newline characters
     fitWords curLine _ ("\n":ws) = curLine : fitWords [] 0 ws
     -- a new line
-    fitWords _ 0 (w:ws) = fitWords [w] (length $ asString w) ws
+    fitWords _ 0 (w:ws) = fitWords [w] (length $ uncolored w) ws
     -- add a word to a line
-    fitWords curLine curLen (w:ws) = let wLen = length (asString w)
+    fitWords curLine curLen (w:ws) = let wLen = length (uncolored w)
                                          spaceAhead = case ws of
                                            (" " : _) -> True
                                            _ -> False
@@ -342,17 +350,34 @@ renderBlock (P.Header _ _ i) = do
 renderBlock P.HorizontalRule = do
   st <- get
   indented [fromString $ replicate (columns st - indentationLevel st * 2) '-']
-renderBlock (P.Table _ _ _ headers rows) = do
-  -- that's a silly, yet a simple way to render a table. improve it
-  -- later (todo).
-  renderStairs headers
-  mapM_ renderStairs rows
+renderBlock (P.Table caption _ widths headers rows) = do
+  -- todo: don't ignore alignments, improve relative widths
+  -- calculation and handling.
+  indented =<< concat <$> mapM readInline caption
+  mapM_ (\r -> renderBlock P.HorizontalRule >> tableRow r) (headers : rows)
+  renderBlock P.HorizontalRule
   where
-    renderStairs :: [[P.Block]] -> Renderer ()
-    renderStairs [] = pure ()
-    renderStairs (x:xs) = do
-      renderBlocks x
-      withIndent $ renderStairs xs
+    tableCell :: Int -> [P.Block] -> Renderer [Colored String]
+    tableCell w blocks = do
+      st <- get
+      let l = runRenderer w (linkCount st) $ mapM_ renderBlock blocks
+      mapM_ storeLink $ lefts l
+      pure $ map
+        (\x -> x <> Value (replicate (w - length (uncolored x)) ' '))
+        $ rights l
+    tableRow :: [[P.Block]] -> Renderer ()
+    tableRow cols = do
+      st <- get
+      let maxWidth = columns st - indentationLevel st
+          widths' = map (\w -> floor (fromIntegral maxWidth * w - 3)) $
+            if any (/= 0) widths
+            then widths
+            else replicate (length widths) (1 / fromIntegral (length widths))
+      cells <- zipWithM tableCell widths' cols
+      let maxLines = foldr (max . length) 0 cells
+          padded = zipWith (\w c -> c ++ replicate (maxLines - length c)
+                             (fromString $ replicate w ' ')) widths' cells
+      indented $ map (mconcat . intersperse (Value " | ")) $ transpose padded
 renderBlock (P.Div _ b) = renderBlocks b
 renderBlock P.Null = pure ()
 
@@ -492,7 +517,7 @@ renderDoc (P.Pandoc _ blocks) = do
   term <- liftIO TI.setupTermFromEnv
   st <- get
   let cols = maybe 80 id $ TI.getCapability term TI.termColumns
-      l = runRenderer cols $ mapM_ renderBlock blocks
+      l = runRenderer cols 0 $ mapM_ renderBlock blocks
       textLines = rights l
   modify (\s -> s { links = lefts l })
   if embedded st
