@@ -506,9 +506,10 @@ renderDoc (P.Pandoc _ blocks) = do
     showLines shownLines
     modify (\s -> s { display = ([], shownLines, nextLines) })
 
--- | Evaluates user commands.
-command :: MonadIO m => Command -> StateT LoopState m ()
-command (GoTo u') = do
+-- | Decides what to do with a given URI; either returns a document or
+-- runs an external viewer. Used by both 'GoTo' and 'Reload'.
+loadDocument :: MonadIO m => URI -> StateT LoopState m (URI, Maybe P.Pandoc)
+loadDocument u' = do
   st <- get
   let ddg = isPrefixOf "/l/?kh=-1&uddg=" $ uriToString id u' ""
       u = case (ddg, uriIsAbsolute u', history st) of
@@ -518,10 +519,10 @@ command (GoTo u') = do
             (_, False, (_, [(cur, _)], _)) -> relativeTo u' cur
             _ -> u'
       cmd = maybe (defaultCommand $ conf st) id (M.lookup (init $ uriScheme u) (commands $ conf st))
+      ext = case takeExtension $ uriPath u of
+        ('.':xs) -> map toLower xs
+        other -> other
   d <- liftIO $ do
-    let ext = case takeExtension $ uriPath u of
-          ('.':xs) -> map toLower xs
-          other -> other
     case M.lookup ext (externalViewers $ conf st) of
       Nothing -> do
         doc <- readDoc cmd u
@@ -547,9 +548,15 @@ command (GoTo u') = do
           when (ec /= ExitSuccess) $
             putErrLn $ concat ["An error occured. Exit code: ", show ec]
         pure mzero
+  pure (u, d)
+
+-- | Evaluates user commands.
+command :: MonadIO m => Command -> StateT LoopState m ()
+command (GoTo u') = do
+  (u, d) <- loadDocument u'
   case d of
     Nothing -> pure ()
-    Just doc@(P.Pandoc _ _) -> do
+    Just doc -> do
       renderDoc doc
       modify $ \s ->
         let (prev, cur, _) = history s
@@ -588,11 +595,22 @@ command More = do
       showLines newLines
       modify (\s -> s { display = (reverse cur ++ prev, newLines, next') })
       pure ()
-command Reload = liftIO $ putErrLn "Not implemented yet (TODO)"
+command Reload = do
+  st <- get
+  case history st of
+    (_, [(u, _)], _) -> do
+      (_, d) <- loadDocument u
+      case d of
+        Nothing -> pure ()
+        Just doc -> do
+          renderDoc doc
+          modify $ \s -> let (prev, _, next) = history s
+                         in s { history = ( prev, [(u, doc)], next ) }
+    _ -> putErrLn "There's nothing to reload"
 command Help = do
   st <- get
   liftIO $ do
-    putErrLn "[q]uit, [b]ack, [f]orward, [h]elp, [re]load config"
+    putErrLn "[q]uit, [b]ack, [f]orward, [h]elp, [r]eload, [re]load config"
     putErrLn "type a number to follow a link, \"<number>?\" to print its URI"
     putErrLn "type an URI (absolute or relative) to open it"
     when (paginate $ conf st) $ putErrLn "RET to scroll"

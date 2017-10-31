@@ -22,7 +22,7 @@ your default emacs browser:
 
 * Commands
 
-- [q]uit, [b]ack, [f]orward, [h]elp, [re]load config
+- [q]uit, [b]ack, [f]orward, [h]elp, [r]eload, [re]load config
 - <number>: follow a link (or open the referenced file)
 - <number>?: show link/image URI
 - ?: show current URI

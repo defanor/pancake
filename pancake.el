@@ -269,6 +269,11 @@
   (interactive)
   (pancake-process-send "q"))
 
+(defun pancake-reload ()
+  "Reload the current document."
+  (interactive)
+  (pancake-process-send "r"))
+
 (defun pancake-input (string)
   "Pancake input handler: opens minibuffer for input.
 Sets the initial contents to STRING, reads the rest, and passes
@@ -291,6 +296,7 @@ it to `pancake-process' as input."
     (define-key map (kbd "B") 'pancake-go-backward)
     (define-key map (kbd "F") 'pancake-go-forward)
     (define-key map (kbd "Q") 'pancake-quit)
+    (define-key map (kbd "R") 'pancake-reload)
     map)
   "Keymap for `pancake-mode'.")
 
