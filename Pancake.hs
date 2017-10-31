@@ -36,13 +36,14 @@ import qualified Data.Map as M
 import System.Directory
 import System.Exit
 import GHC.IO.Handle
-import qualified Data.ByteString.UTF8 as BSUTF8
 import Control.Exception
 import Text.Pandoc.Readers.Plain
 import Text.Pandoc.Readers.Gopher
 import Control.Applicative
 import qualified System.IO as SIO
 import Data.Char
+import qualified Data.Text as T
+import Data.Text.Encoding (decodeUtf8')
 
 
 -- | Prints a line into stderr.
@@ -131,20 +132,22 @@ readDoc cmd uri = do
           (_, ext) -> byExtension ext
       cols = maybe 80 id $ TI.getCapability term TI.termColumns
       opts = def { P.readerColumns = cols }
-  case reader of
-    P.StringReader f -> f opts $ BSUTF8.toString out
-    P.ByteStringReader f -> fmap fst <$> f opts (BL.fromStrict out)
+  P.runIO $ case reader of
+    (P.TextReader f, _) -> f opts $ case decodeUtf8' out of
+                                      Left _ -> T.empty
+                                      Right r -> r
+    (P.ByteStringReader f, _) -> f opts $ BL.fromStrict out
   where
     http ext = byExtension ext <|> html
     html = P.getReader "html"
-    plain = P.StringReader . const $ pure . readPlain
-    gopher = pure . P.StringReader . const $ pure . readGopher
+    plain = (P.TextReader . const $ readPlain, P.emptyExtensions)
+    gopher = pure (P.TextReader . const $ readGopher, P.emptyExtensions)
     byExtension "" = Left "No extension"
     byExtension ".md" = P.getReader "markdown"
     byExtension ".htm" = html
     byExtension ".ltx" = P.getReader "latex"
     byExtension ".tex" = P.getReader "latex"
-    byExtension ".txt" = pure . P.StringReader . const $ pure . readPlain
+    byExtension ".txt" = pure plain
     byExtension ext = P.getReader $ tail ext
 
 

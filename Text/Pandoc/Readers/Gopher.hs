@@ -13,10 +13,11 @@ that, there are some adjustments.
 module Text.Pandoc.Readers.Gopher ( readGopher ) where
 
 import Text.Pandoc.Definition
-import Text.Pandoc.Error
 import Text.Parsec
-import Text.Parsec.String
+import Text.Parsec.Text
 import Text.Pandoc.Readers.Plain
+import Text.Pandoc.Class
+import qualified Data.Text as T
 
 
 -- | UNASCII   ::= ASCII - [Tab CR-LF NUL].
@@ -75,9 +76,10 @@ pDirEntries = concat <$> manyTill (choice [pInfo, pLink] <* pEOL) pLastLine
 
 -- | Reads Gopher directory entries, falls back to plain text on
 -- failure.
-readGopher :: String -> Either PandocError Pandoc
-readGopher s = Right . Pandoc mempty . pure . Plain $
+readGopher :: PandocMonad m => T.Text -> m Pandoc
+readGopher s = pure . Pandoc mempty . pure . Plain $
   case parse pDirEntries "directory entry" s of
     -- fallback to plain text
-    Left _ -> concatMap (\l -> (lineToInlines l) ++ [LineBreak]) $ lines s
+    Left _ ->
+      concatMap (\l -> (lineToInlines $ T.unpack l) ++ [LineBreak]) $ T.lines s
     Right r -> r

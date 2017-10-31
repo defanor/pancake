@@ -11,7 +11,8 @@ module Text.Pandoc.Readers.Plain ( readPlain
                                  ) where
 
 import Text.Pandoc.Definition
-import Text.Pandoc.Error
+import Text.Pandoc.Class
+import qualified Data.Text as T
 
 
 -- | Translates a text line into a list of 'Inline' elements suitable
@@ -24,6 +25,6 @@ lineToInlines s = let (cur, next) = break (== ' ') s
 
 -- | Reads plain text, always succeeding and producing a single
 -- 'Plain' block.
-readPlain :: String -> Either PandocError Pandoc
-readPlain = Right . Pandoc mempty . pure . Plain .
-  concatMap (\l -> (lineToInlines l) ++ [LineBreak]) . lines
+readPlain :: PandocMonad m => T.Text -> m Pandoc
+readPlain = pure . Pandoc mempty . pure . Plain .
+  concatMap (\l -> (lineToInlines $ T.unpack l) ++ [LineBreak]) . T.lines
