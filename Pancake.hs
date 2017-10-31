@@ -277,22 +277,23 @@ fitLines :: Int
 fitLines maxLen inlineBits =
   map mconcat $ map reverse $ fitWords [] 0 inlineBits
   where
-    -- handle newline characters
-    fitWords curLine _ ("\n":ws) = curLine : fitWords [] 0 ws
-    -- a new line
-    fitWords _ 0 (w:ws) = fitWords [w] (length $ uncolored w) ws
-    -- add a word to a line
-    fitWords curLine curLen (w:ws) = let wLen = length (uncolored w)
-                                         spaceAhead = case ws of
-                                           (" " : _) -> True
-                                           _ -> False
-      in if curLen + wLen <= maxLen
-         then fitWords (w:curLine) (curLen + wLen) $
-              -- if there's an unnecessary space ahead, skip it
-              if (curLen + wLen + 1 > maxLen && spaceAhead)
-              then tail ws
-              else ws
-         else curLine : fitWords [] 0 (w:ws)
+    fitWords curLine curLen (w:ws)
+      -- handle newline characters
+      | uncolored w == "\n" = curLine : fitWords [] 0 ws
+      -- a new line
+      | curLen == 0 = fitWords [w] (length $ uncolored w) ws
+      -- add a word to a line
+      | otherwise = let wLen = length (uncolored w)
+                        spaceAhead = case ws of
+                                       (" " : _) -> True
+                                       _ -> False
+        in if curLen + wLen <= maxLen
+           then fitWords (w:curLine) (curLen + wLen) $
+                -- if there's an unnecessary space ahead, skip it
+                if (curLen + wLen + 1 > maxLen && spaceAhead)
+                then tail ws
+                else ws
+           else curLine : fitWords [] 0 (w:ws)
     -- end, no words pending
     fitWords _ 0 [] = []
     -- end, with words pending
