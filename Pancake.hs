@@ -25,7 +25,6 @@ import System.Process
 import Control.Monad.Writer hiding ((<>))
 import Control.Monad.State
 import Data.Maybe
-import Data.Either
 import Data.List
 import Data.String
 import Data.Monoid.Colorful
@@ -154,38 +153,75 @@ readDoc cmd uri = do
 -- | Renderer state.
 data RS = RS { indentationLevel :: Int
              , linkCount :: Int
+             , lineNumber :: Int
              , bulleted :: Bool
              , ordered :: Maybe Int
              , columns :: Int
              } deriving (Show, Eq)
 
+-- | This is what gets rendered.
+data RendererOutput = RLink URI
+                    | RLine (Colored String)
+                    | RIdentifier String Int
+                    deriving (Show, Eq)
+
+-- | Extracts links.
+rLinks :: [RendererOutput] -> [URI]
+rLinks [] = []
+rLinks ((RLink l):xs) = l : rLinks xs
+rLinks (_:xs) = rLinks xs
+
+-- | Extracts text lines.
+rLines :: [RendererOutput] -> [Colored String]
+rLines [] = []
+rLines ((RLine l):xs) = l : rLines xs
+rLines (_:xs) = rLines xs
+
+-- | Extracts identifiers.
+rIdentifiers :: [RendererOutput] -> [(String, Int)]
+rIdentifiers [] = []
+rIdentifiers ((RIdentifier s i):xs) = (s, i) : rIdentifiers xs
+rIdentifiers (_:xs) = rIdentifiers xs
+
+
 -- | Used to render 'Pandoc' docs by writing text lines and collected
 -- links using 'Writer'.
-type Renderer a = WriterT [Either URI (Colored String)] (State RS) a
+type Renderer a = WriterT [RendererOutput] (State RS) a
 
 -- | Runs a 'Renderer'.
 runRenderer :: Int
             -- ^ Column count (line width).
             -> Int
             -- ^ Link number to start with.
+            -> Int
+            -- ^ Line number to start with.
             -> Renderer a
             -- ^ A renderer.
-            -> [Either URI (Colored String)]
+            -> [RendererOutput]
             -- ^ Collected links and text lines.
-runRenderer cols ls r = snd $ fst $ runState (runWriterT r)
-  (RS 0 ls False Nothing cols)
+runRenderer cols ls ln r = snd $ fst $ runState (runWriterT r)
+  (RS 0 ls ln False Nothing cols)
 
 -- | Stores a link, increasing the counter
 storeLink :: URI -> Renderer Int
 storeLink u = do
-  tell [Left u]
+  tell [RLink u]
   st <- get
   put (st { linkCount = linkCount st + 1 })
   pure $ linkCount st
 
 -- | Stores text lines.
 storeLines :: [Colored String] -> Renderer ()
-storeLines = tell . map Right
+storeLines l = do
+  modify (\s -> s { lineNumber = lineNumber s + length l })
+  tell $ map RLine l
+
+-- | Stores attributes (identifier and line number).
+storeAttr :: P.Attr -> Renderer ()
+storeAttr ("", _, _) = pure ()
+storeAttr (i, _, _) = do
+  l <- get
+  tell [RIdentifier i (lineNumber l)]
 
 -- | Increases indentation level, runs a renderer, decreases
 -- indentation level.
@@ -286,13 +322,16 @@ readInline (P.SmallCaps s) = wrappedInlines "\\sc{" "}" s
 readInline (P.Quoted P.SingleQuote s) = wrappedInlines "‘" "’" s
 readInline (P.Quoted P.DoubleQuote s) = wrappedInlines "“" "”" s
 readInline (P.Cite _ s) = concat <$> mapM readInline s
-readInline (P.Code _ s) = pure $ map fromString $ intersperse "\n" $ lines s
+readInline (P.Code attr s) = do
+  storeAttr attr
+  pure $ map fromString $ intersperse "\n" $ lines s
 readInline P.Space = pure . pure $ fromString " "
 readInline P.SoftBreak = pure . pure $ fromString " "
 readInline P.LineBreak = pure . pure $ fromString "\n"
 readInline (P.Math _ s) = pure . pure $ fromString s
 readInline (P.RawInline _ s) = pure . pure $ fromString s
-readInline (P.Link _ alt (url, title)) =
+readInline (P.Link attr alt (url, title)) = do
+  storeAttr attr
   case parseURIReference url of
     Just uri -> do
       a <- mapM readInline alt
@@ -301,18 +340,19 @@ readInline (P.Link _ alt (url, title)) =
             ("", alt') -> concat alt'
             (title', []) -> [fromString title']
             (_, alt') -> concat alt'
-      case uri of
-        -- fragment links are mostly useless here, at least for now.
-        -- but still marking them as links, to avoid confusion.
-        (URI "" Nothing "" "" _) -> pure $ map (Fg Magenta) t
-        _ -> storeLink uri >>=
-             \cnt -> pure $ map (Fg Cyan) t ++
-                     [Fg Blue (mconcat ["[", fromString $ show cnt, "]"])]
+      cnt <- storeLink uri
+      let color = case uri of
+            (URI "" Nothing "" "" ('#':_)) -> Magenta
+            _ -> Cyan
+      pure $ map (Fg color) t ++
+        [Fg Blue (mconcat ["[", fromString $ show cnt, "]"])]
     Nothing -> pure . pure $ fromString title
 readInline (P.Image attr alt (url, title)) =
   (Fg Red "(image) " :) <$> readInline (P.Link attr alt (url, title))
 readInline (P.Note _) = pure $ pure "(note: todo)"
-readInline (P.Span _ i) = concat <$> mapM readInline i
+readInline (P.Span attr i) = do
+  storeAttr attr
+  concat <$> mapM readInline i
 
 -- | Renders a block element.
 renderBlock :: P.Block -> Renderer ()
@@ -322,7 +362,8 @@ renderBlock (P.Para i) = do
   storeLines [""]
 renderBlock (P.LineBlock i) =
   indented =<< concatMap mconcat <$> mapM (mapM readInline) i
-renderBlock (P.CodeBlock _ s) =
+renderBlock (P.CodeBlock attr s) = do
+  storeAttr attr
   indented $ map fromString $ intersperse "\n" $ lines s
 renderBlock (P.RawBlock _ s) =
   indented $ map fromString $ intersperse "\n" $ lines s
@@ -345,7 +386,8 @@ renderBlock (P.DefinitionList dl) =
         indented term'
         mapM_ renderBlocks definition
   in mapM_ renderDefinition dl
-renderBlock (P.Header _ _ i) = do
+renderBlock (P.Header _ attr i) = do
+  storeAttr attr
   strings <- concat <$> mapM readInline i
   indented $ "\n" : map (Fg Green . Style Bold . Style Underline) strings
 renderBlock P.HorizontalRule = do
@@ -361,11 +403,12 @@ renderBlock (P.Table caption _ widths headers rows) = do
     tableCell :: Int -> [P.Block] -> Renderer [Colored String]
     tableCell w blocks = do
       st <- get
-      let l = runRenderer w (linkCount st) $ mapM_ renderBlock blocks
-      mapM_ storeLink $ lefts l
+      let l = runRenderer w (linkCount st) (lineNumber st) $
+            mapM_ renderBlock blocks
+      mapM_ storeLink $ rLinks l
       pure $ map
         (\x -> x <> Value (replicate (w - length (uncolored x)) ' '))
-        $ rights l
+        $ rLines l
     tableRow :: [[P.Block]] -> Renderer ()
     tableRow cols = do
       st <- get
@@ -379,7 +422,9 @@ renderBlock (P.Table caption _ widths headers rows) = do
           padded = zipWith (\w c -> c ++ replicate (maxLines - length c)
                              (fromString $ replicate w ' ')) widths' cells
       indented $ map (mconcat . intersperse (Value " | ")) $ transpose padded
-renderBlock (P.Div _ b) = renderBlocks b
+renderBlock (P.Div attr b) = do
+  storeAttr attr
+  renderBlocks b
 renderBlock P.Null = pure ()
 
 -- | Renders multiple block elements.
@@ -476,12 +521,12 @@ data Command = Quit
              deriving (Show, Eq)
 
 -- | A zipper kind of thing, for scrolling and history traversal.
-type Sliding a = ([a], [a], [a])
+type Sliding a = ([a], [a])
 
 -- | Main event loop's state.
 data LoopState = LS { history :: Sliding (URI, P.Pandoc)
-                    , display :: Sliding (Colored String)
-                    , links :: [URI]
+                    , position :: Int
+                    , rendered :: [RendererOutput]
                     , conf :: Config
                     , embedded :: Bool
                     } deriving (Show)
@@ -492,22 +537,36 @@ showLines ls = liftIO $ do
   term <- getTerm
   mapM_ (\s -> printColoredS term s >> putChar '\n') ls
 
+-- | Shows a list of strings as an s-expression
+list :: [String] -> String
+list l = "(" ++ intercalate " " l ++ ")"
+
+-- | Prints a list of strings as an s-expression.
+putSexpLn :: MonadIO m => [String] -> StateT LoopState m ()
+putSexpLn s = liftIO $ do
+  putStrLn $ list s
+  SIO.hFlush SIO.stdout
+
 -- | Prints rendered lines as s-expressions.
-showSexps :: MonadIO m => [Colored String] -> StateT LoopState m ()
-showSexps l = liftIO $ do
+showSexps :: MonadIO m => [RendererOutput] -> StateT LoopState m ()
+showSexps ro =
   -- would be nicer to use some library for this, but they tend to be
   -- abandoned, and the task is simple enough to do it here
-  putStrLn $ "( "
-    ++ intercalate " " (map (\x -> concat ["(", showSexp x, ")"]) l) ++ " )"
-  SIO.hFlush SIO.stdout
+  putSexpLn [ "render"
+            , list $ "lines" : map (list . pure . showSexp) (rLines ro)
+            , list $ "identifiers"
+              : map (\(i, l) -> list [encodeStr i, show l]) (rIdentifiers ro)
+            , list $ "links"
+              : map (\uri -> encodeStr $ uriToString id uri "") (rLinks ro)]
   where
+    encodeStr s = concat ["\"", concatMap escape s, "\""]
+    escape '\\' = "\\\\"
+    escape '"' = "\\\""
+    escape other = pure other
     showSexp :: Colored String -> String
     -- no need for nils since the pairs are flattened
     showSexp Nil = ""
-    showSexp (Value x) = concat ["\"", concatMap escape x, "\""]
-      where escape '\\' = "\\\\"
-            escape '"' = "\\\""
-            escape other = pure other
+    showSexp (Value x) = encodeStr x
     showSexp (Style s c) = concat ["(style ", show s, " ", showSexp c, ")"]
     showSexp (Unstyle s c) = concat ["(unstyle ", show s, " ", showSexp c, ")"]
     showSexp (Fg clr c) = concat ["(fg (", show clr, ") ", showSexp c, ")"]
@@ -521,19 +580,17 @@ renderDoc (P.Pandoc _ blocks) = do
   term <- liftIO TI.setupTermFromEnv
   st <- get
   let cols = maybe 80 id $ TI.getCapability term TI.termColumns
-      l = runRenderer cols 0 $ mapM_ renderBlock blocks
-      textLines = rights l
-  modify (\s -> s { links = lefts l })
+      l = runRenderer cols 0 1 $ mapM_ renderBlock blocks
+      textLines = rLines l
+  modify (\s -> s { rendered = l })
   if embedded st
-    then showSexps textLines
+    then showSexps l
     else do
     let rows = maybe 25 id (TI.getCapability term TI.termLines) - 1
-        (shownLines, nextLines) =
-          if paginate (conf st)
-          then splitAt rows textLines
-          else (textLines, [])
-    showLines shownLines
-    modify (\s -> s { display = ([], shownLines, nextLines) })
+    showLines $ if paginate (conf st)
+                then take rows textLines
+                else textLines
+    modify (\s -> s { position = rows })
 
 -- | Decides what to do with a given URI; either returns a document or
 -- runs an external viewer. Used by both 'GoTo' and 'Reload'.
@@ -546,7 +603,7 @@ loadDocument u' = do
             (True, _, _) -> maybe u' id $
               parseAbsoluteURI (unEscapeString $ drop 12 (uriQuery u'))
             -- handle relative URIs
-            (_, False, (_, [(cur, _)], _)) -> relativeTo u' cur
+            (_, False, ((cur, _):_, _)) -> relativeTo u' cur
             _ -> u'
       cmd = maybe (defaultCommand $ conf st) id $
         M.lookup (init $ uriScheme u) (commands $ conf st)
@@ -581,62 +638,78 @@ loadDocument u' = do
         pure mzero
   pure (u, d)
 
--- | Evaluates user commands.
-command :: MonadIO m => Command -> StateT LoopState m ()
-command (GoTo u') = do
+-- | Visits an URI, updates history accordingly.
+goTo :: MonadIO m => URI -> StateT LoopState m ()
+goTo u' = do
   (u, d) <- loadDocument u'
   case d of
     Nothing -> pure ()
     Just doc -> do
       renderDoc doc
       modify $ \s ->
-        let (prev, cur, _) = history s
-        in s { history = ( (take (historyDepth $ conf s) $ cur ++ prev)
-                         , [(u, doc)], []) }
+        let (prev, _) = history s
+        in s { history = (take (historyDepth $ conf s) $ (u, doc) : prev, []) }
+
+-- | Evaluates user commands.
+command :: MonadIO m => Command -> StateT LoopState m ()
+command (GoTo u@(URI _ _ _ _ ('#':xs))) = do
+  -- follow an URI first, if it's not just a fragment
+  case u of
+    (URI "" Nothing "" "" _) -> pure ()
+    _ -> goTo u
+  -- get to the fragment
+  st <- get
+  case (lookup xs (rIdentifiers $ rendered st), embedded st) of
+    (Nothing, _) -> putErrLn $ "Unknown identifier: " ++ xs
+    (Just x, False) -> do
+      term <- liftIO TI.setupTermFromEnv
+      let lineCount = maybe 25 id (TI.getCapability term TI.termLines)
+      when (x + lineCount - 2 > position st) $ do
+        -- scroll to the given position without skipping anything
+        showLines $ take (x - position st + lineCount - 2) $
+          drop (position st) (rLines $ rendered st)
+        modify (\s -> s { position = x + lineCount - 2 })
+    (Just x, True) -> putSexpLn ["goto", show x]
+command (GoTo u) = goTo u
 command (Follow i) = do
   st <- get
-  if length (links st) > i
-    then command (GoTo $ links st !! i)
+  if length (rLinks $ rendered st) > i
+    then command (GoTo $ rLinks (rendered st) !! i)
     else liftIO $ putErrLn "No such link"
 command Back = do
   st <- get
   case history st of
-    (p@(_, d):prev, cur, next) -> do
+    (cur:p@(_, d):prev, next) -> do
       renderDoc d
       modify $ \s ->
-        s { history = (prev, [p], take (historyDepth $ conf s) $ cur ++ next) }
+        s { history = (p:prev, take (historyDepth $ conf s) $ cur : next) }
     _ -> liftIO $ putErrLn "There's nothing back there"
 command Forward = do
   st <- get
   case history st of
-    (prev, cur, n@(_, d):next) -> do
+    (prev, n@(_, d):next) -> do
       renderDoc d
       modify $ \s ->
-        s { history = (take (historyDepth $ conf s) $ cur ++ prev, [n], next) }
+        s { history = (take (historyDepth $ conf s) $ n : prev, next) }
     _ -> liftIO $ putErrLn "Nowhere to go"
 command More = do
   st <- get
-  case display st of
-    (_, _, []) -> pure ()
-    (prev, cur, next) -> do
-      term <- liftIO TI.setupTermFromEnv
-      let lineCount' = maybe 25 id (TI.getCapability term TI.termLines)
-          lineCount = lineCount' - div lineCount' 3
-          (newLines, next') = splitAt lineCount next
-      showLines newLines
-      modify (\s -> s { display = (reverse cur ++ prev, newLines, next') })
-      pure ()
+  term <- liftIO TI.setupTermFromEnv
+  let lineCount' = maybe 25 id (TI.getCapability term TI.termLines)
+      lineCount = lineCount' - div lineCount' 3
+  showLines $ take lineCount $ drop (position st) (rLines $ rendered st)
+  modify (\s -> s { position = position st + lineCount })
+  pure ()
 command Reload = do
   st <- get
   case history st of
-    (_, [(u, _)], _) -> do
+    ((u, _):prev, next) -> do
       (_, d) <- loadDocument u
       case d of
         Nothing -> pure ()
         Just doc -> do
           renderDoc doc
-          modify $ \s -> let (prev, _, next) = history s
-                         in s { history = ( prev, [(u, doc)], next ) }
+          modify $ \s -> s { history = ( (u, doc):prev, next ) }
     _ -> putErrLn "There's nothing to reload"
 command Help = do
   st <- get
@@ -647,13 +720,13 @@ command Help = do
     when (paginate $ conf st) $ putErrLn "RET to scroll"
 command (Show n) = do
   st <- get
-  liftIO . putErrLn $ if length (links st) > n
-                      then show $ links st !! n
+  liftIO . putErrLn $ if length (rLinks $ rendered st) > n
+                      then show $ rLinks (rendered st) !! n
                       else "No such link"
 command ShowCurrent = do
   st <- get
   case history st of
-    (_, [(u, _)], _) -> liftIO $ putErrLn $ show u
+    ((u, _):_, _) -> liftIO $ putErrLn $ show u
     _ -> pure ()
 command (Shortcut u q) = command . GoTo . fromJust . parseURI $
   u ++ escapeURIString isReserved q
@@ -695,6 +768,5 @@ main = do
   args <- getArgs
   insideEmacs <- lookupEnv "INSIDE_EMACS"
   _ <- runStateT (loadConfig >> eventLoop) $
-    LS ([],[],[]) ([],[],[]) [] def
-    (isJust insideEmacs || "--embedded" `elem` args)
+    LS ([],[]) 0 [] def (isJust insideEmacs || "--embedded" `elem` args)
   pure ()

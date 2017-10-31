@@ -201,16 +201,25 @@
   "Pancake process filter for stdout."
   (when (buffer-live-p (process-buffer proc))
     (with-current-buffer (process-buffer proc)
-      (read-only-mode -1)
-      (delete-region (point-min) (point-max))
       (setq pancake-process-output (concat pancake-process-output string))
       (when (pancake-line-p pancake-process-output)
-        (dolist (line (read pancake-process-output))
-          (insert (pancake-print-line line))
-          (newline))
-        (goto-char (point-min))
-        (setq pancake-process-output ""))
-      (read-only-mode 1))))
+        ;; there may be multiple lines, processing separately
+        (dolist (raw-line (split-string pancake-process-output "\n"))
+          (unless (string-empty-p raw-line)
+            (let ((output (read raw-line)))
+              (pcase output
+                (`(render . ,alist)
+                 (read-only-mode -1)
+                 (delete-region (point-min) (point-max))
+                 ;; todo: maybe store identifiers and links for
+                 ;; further manipulation
+                 (dolist (line (alist-get 'lines alist))
+                   (insert (pancake-print-line line))
+                   (newline))
+                 (read-only-mode 1)
+                 (goto-char (point-min)))
+                (`(goto ,line) (goto-line line))))))
+        (setq pancake-process-output "")))))
 
 (defun pancake-process-stderr-filter (proc string)
   "Pancake process filter for stderr."
@@ -284,7 +293,7 @@ it to `pancake-process' as input."
 
 (defvar pancake-mode-map
   (let ((map (make-sparse-keymap))
-        (chars (append (list ?? ?. ?/)
+        (chars (append (list ?? ?. ?/ ?#)
                        (number-sequence ?0 ?9)
                        (number-sequence ?a ?z))))
     (dolist (char chars)
