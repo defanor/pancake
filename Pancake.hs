@@ -183,6 +183,10 @@ storeLink u = do
   put (st { linkCount = linkCount st + 1 })
   pure $ linkCount st
 
+-- | Stores text lines.
+storeLines :: [Colored String] -> Renderer ()
+storeLines = tell . map Right
+
 -- | Increases indentation level, runs a renderer, decreases
 -- indentation level.
 withIndent :: Renderer a -> Renderer a
@@ -200,21 +204,22 @@ indented strings = do
                then indentationLevel st + 2
                else maybe (indentationLevel st)
                     ((indentationLevel st + 2 +) . length . show) (ordered st)
+      pad = map (fromString (replicate indent ' ') <>)
   case ( fitLines ((columns st) - indent) strings
        , bulleted st
        , ordered st) of
-    ([], _, _) -> tell []
-    (x:xs, True, _) ->
-      tell $ Right (fromString (replicate (indentationLevel st) ' ') <> Fg Yellow "* " <> x)
-      : map (Right . (fromString (replicate indent ' ') <>)) xs
+    ([], _, _) -> pure ()
+    (x:xs, True, _) -> storeLines $
+      (fromString (replicate (indentationLevel st) ' ') <> Fg Yellow "* " <> x)
+      : pad xs
     (x:xs, _, Just n) -> do
-      tell $ Right (mconcat [ fromString (replicate (indentationLevel st) ' ')
+      storeLines $ (mconcat [ fromString (replicate (indentationLevel st) ' ')
                             , Fg Yellow $ fromString (show n ++ ".")
                             , " "
                             , x])
-        : map (Right . (fromString (replicate indent ' ') <>)) xs
+        : pad xs
       modify (\s -> s { ordered = Just (n + 1) })
-    (xs, _, _) -> tell $ map (Right . (fromString (replicate indent ' ') <>)) xs
+    (xs, _, _) -> storeLines $ pad xs
 
 -- This may be unreliable, especially for resulting length estimation,
 -- but usually works. Maybe improve someday.
@@ -230,7 +235,8 @@ fitLines :: Int
          -- ^ Strings: usually words and similar short elements.
          -> [Colored String]
          -- ^ Fitted lines.
-fitLines maxLen inlineBits = map mconcat $ map reverse $ fitWords [] 0 inlineBits
+fitLines maxLen inlineBits =
+  map mconcat $ map reverse $ fitWords [] 0 inlineBits
   where
     -- handle newline characters
     fitWords curLine _ ("\n":ws) = curLine : fitWords [] 0 ws
@@ -294,7 +300,7 @@ readInline (P.Link _ alt (url, title)) =
             ("", []) -> [fromString url]
             ("", alt') -> concat alt'
             (title', []) -> [fromString title']
-            (_, alt') -> concat alt' -- [[fromString title'], [" ("], concat alt', [")"]]
+            (_, alt') -> concat alt'
       case uri of
         -- fragment links are mostly useless here, at least for now.
         -- but still marking them as links, to avoid confusion.
@@ -303,28 +309,23 @@ readInline (P.Link _ alt (url, title)) =
              \cnt -> pure $ map (Fg Cyan) t ++
                      [Fg Blue (mconcat ["[", fromString $ show cnt, "]"])]
     Nothing -> pure . pure $ fromString title
-readInline (P.Image attr alt (url, title)) = do
-  asLink <- readInline (P.Link attr alt (url, title))
-  pure $ Fg Red "(image) " : asLink
+readInline (P.Image attr alt (url, title)) =
+  (Fg Red "(image) " :) <$> readInline (P.Link attr alt (url, title))
 readInline (P.Note _) = pure $ pure "(note: todo)"
-readInline (P.Span _ i) = do
-  strings <- concat <$> mapM readInline i
-  pure strings
+readInline (P.Span _ i) = concat <$> mapM readInline i
 
 -- | Renders a block element.
 renderBlock :: P.Block -> Renderer ()
-renderBlock (P.Plain i) = do
-  strings <- concat <$> mapM readInline i
-  indented strings
+renderBlock (P.Plain i) = indented =<< concat <$> mapM readInline i
 renderBlock (P.Para i) = do
-  strings <- concat <$> mapM readInline i
-  indented strings
-  tell [Right ""]
-renderBlock (P.LineBlock i) = do
-  strings <- concatMap mconcat <$> mapM (mapM readInline) i
-  indented strings
-renderBlock (P.CodeBlock _ s) = indented $ map fromString $ intersperse "\n" $ lines s
-renderBlock (P.RawBlock _ s) = indented $ map fromString $ intersperse "\n" $ lines s
+  indented =<< concat <$> mapM readInline i
+  storeLines [""]
+renderBlock (P.LineBlock i) =
+  indented =<< concatMap mconcat <$> mapM (mapM readInline) i
+renderBlock (P.CodeBlock _ s) =
+  indented $ map fromString $ intersperse "\n" $ lines s
+renderBlock (P.RawBlock _ s) =
+  indented $ map fromString $ intersperse "\n" $ lines s
 renderBlock (P.BlockQuote bs) = renderBlocks bs
 renderBlock (P.OrderedList _ bs) = do
   st <- get
@@ -417,25 +418,26 @@ instance ToJSON Config
 -- | The default configuration to use if user configuration is
 -- missing.
 instance Default Config where
-  def = Config { commands = M.fromList
-                 [ ("ssh", "scp \"${URI_REGNAME}:${URI_PATH}\" /dev/stdout")
-                 , ("gopher", "curl \"${URI}\"")]
-               , defaultCommand = "curl -4 -L \"${URI}\""
-               , externalViewers = M.fromList $
-                 map (flip (,) "emacsclient -n \"${FILE}\"")
-                 ["hs", "cabal", "c", "h", "el", "scm", "idr"]
-                 ++ map (flip (,) "xdg-open \"${FILE}\"")
-                 [ "svg", "png", "jpg", "jpeg", "gif", "pdf", "ogg", "ogv"
-                 , "webm", "mp3", "mp4", "mkv", "mpeg", "wav" ]
-               , shortcuts = M.fromList
-                 [ ("ddg", "https://duckduckgo.com/lite/?q=")
-                 , ("wp", "https://en.m.wikipedia.org/wiki/Special:Search?search=")
-                 , ("wt", "https://en.m.wiktionary.org/w/index.php?search=")
-                 , ("gp", "gopher://gopherpedia.com:70/7/lookup?")
-                 , ("vs", "gopher://gopher.floodgap.com/7/v2/vs?")]
-               , paginate = True
-               , historyDepth = 100
-               }
+  def = Config {
+    commands = M.fromList
+      [ ("ssh", "scp \"${URI_REGNAME}:${URI_PATH}\" /dev/stdout")
+      , ("gopher", "curl \"${URI}\"")]
+    , defaultCommand = "curl -4 -L \"${URI}\""
+    , externalViewers = M.fromList $
+      map (flip (,) "emacsclient -n \"${FILE}\"")
+      ["hs", "cabal", "c", "h", "el", "scm", "idr"]
+      ++ map (flip (,) "xdg-open \"${FILE}\"")
+      [ "svg", "png", "jpg", "jpeg", "gif", "pdf", "ogg", "ogv"
+      , "webm", "mp3", "mp4", "mkv", "mpeg", "wav" ]
+    , shortcuts = M.fromList
+      [ ("ddg", "https://duckduckgo.com/lite/?q=")
+      , ("wp", "https://en.m.wikipedia.org/wiki/Special:Search?search=")
+      , ("wt", "https://en.m.wiktionary.org/w/index.php?search=")
+      , ("gp", "gopher://gopherpedia.com:70/7/lookup?")
+      , ("vs", "gopher://gopher.floodgap.com/7/v2/vs?")]
+    , paginate = True
+    , historyDepth = 100
+    }
 
 -- | Loads configuration from an XDG config directory.
 loadConfig :: MonadIO m => StateT LoopState m ()
@@ -450,7 +452,8 @@ loadConfig = do
       c <- decodeFile configPath
       case c of
         Just config -> pure config
-        Nothing -> putErrLn "Failed to read the configuration, using defaults" >> pure def
+        Nothing -> putErrLn "Failed to read the configuration, using defaults"
+          >> pure def
       else encodeFile configPath (def :: Config) >> pure def
   modify $ \s -> s {conf = c}
 
@@ -494,7 +497,8 @@ showSexps :: MonadIO m => [Colored String] -> StateT LoopState m ()
 showSexps l = liftIO $ do
   -- would be nicer to use some library for this, but they tend to be
   -- abandoned, and the task is simple enough to do it here
-  putStrLn $ "( " ++ intercalate " " (map (\x -> concat ["(", showSexp x, ")"]) l) ++ " )"
+  putStrLn $ "( "
+    ++ intercalate " " (map (\x -> concat ["(", showSexp x, ")"]) l) ++ " )"
   SIO.hFlush SIO.stdout
   where
     showSexp :: Colored String -> String
@@ -539,11 +543,13 @@ loadDocument u' = do
   let ddg = isPrefixOf "/l/?kh=-1&uddg=" $ uriToString id u' ""
       u = case (ddg, uriIsAbsolute u', history st) of
             -- fix DDG links (that's rather hacky, todo: improve)
-            (True, _, _) -> maybe u' id $ parseAbsoluteURI (unEscapeString $ drop 12 (uriQuery u'))
+            (True, _, _) -> maybe u' id $
+              parseAbsoluteURI (unEscapeString $ drop 12 (uriQuery u'))
             -- handle relative URIs
             (_, False, (_, [(cur, _)], _)) -> relativeTo u' cur
             _ -> u'
-      cmd = maybe (defaultCommand $ conf st) id (M.lookup (init $ uriScheme u) (commands $ conf st))
+      cmd = maybe (defaultCommand $ conf st) id $
+        M.lookup (init $ uriScheme u) (commands $ conf st)
       ext = case takeExtension $ uriPath u of
         ('.':xs) -> map toLower xs
         other -> other
@@ -598,7 +604,7 @@ command Back = do
     (p@(_, d):prev, cur, next) -> do
       renderDoc d
       modify $ \s ->
-        s { history = ( prev, [p], take (historyDepth $ conf s) $ cur ++ next) }
+        s { history = (prev, [p], take (historyDepth $ conf s) $ cur ++ next) }
     _ -> liftIO $ putErrLn "There's nothing back there"
 command Forward = do
   st <- get
@@ -606,7 +612,7 @@ command Forward = do
     (prev, cur, n@(_, d):next) -> do
       renderDoc d
       modify $ \s ->
-        s { history = (take (historyDepth $ conf s ) $ cur ++ prev, [n], next) }
+        s { history = (take (historyDepth $ conf s) $ cur ++ prev, [n], next) }
     _ -> liftIO $ putErrLn "Nowhere to go"
 command More = do
   st <- get
@@ -689,5 +695,6 @@ main = do
   args <- getArgs
   insideEmacs <- lookupEnv "INSIDE_EMACS"
   _ <- runStateT (loadConfig >> eventLoop) $
-    LS ([],[],[]) ([],[],[]) [] def (isJust insideEmacs || "--embedded" `elem` args)
+    LS ([],[],[]) ([],[],[]) [] def
+    (isJust insideEmacs || "--embedded" `elem` args)
   pure ()
