@@ -164,29 +164,16 @@
   (if (stringp element)
       element
     (pcase element
-      (`(fg (,color) . ,rest)
+      (`(fg ,color . ,rest)
        (let ((inner (pancake-print-line rest)))
          (add-face-text-property
           0 (length inner) (pancake-translate-color color 'foreground) t inner)
          inner))
-      (`(bg (,color) . ,rest)
+      (`(style ,face . ,rest)
        (let ((inner (pancake-print-line rest)))
-         (add-face-text-property
-          0 (length inner) (pancake-translate-color color 'background) t inner)
+         (add-face-text-property 0 (length inner) face t inner)
          inner))
-      (`(style Bold . ,rest)
-       (let ((inner (pancake-print-line rest)))
-         (add-face-text-property 0 (length inner) 'bold t inner)
-         inner))
-      (`(style Underline . ,rest)
-       (let ((inner (pancake-print-line rest)))
-         (add-face-text-property 0 (length inner) 'underline t inner)
-         inner))
-      (`(style Italic . ,rest)
-       (let ((inner (pancake-print-line rest)))
-         (add-face-text-property 0 (length inner) 'italic t inner)
-         inner))
-      (_ (format "%S" element)))))
+      (_ (format "Unexpected element: %S" element)))))
 
 
 (defun pancake-print-line (line)

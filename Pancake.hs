@@ -27,8 +27,7 @@ import Control.Monad.State
 import Data.Maybe
 import Data.List
 import Data.String
-import Data.Monoid.Colorful
-import qualified System.Console.Terminfo as TI
+import System.Console.Terminfo
 import System.Environment
 import Data.Yaml
 import GHC.Generics
@@ -111,7 +110,7 @@ readDoc :: String
         -- ^ A parsed document.
 readDoc cmd uri = do
   out <- retrieve cmd uri
-  term <- TI.setupTermFromEnv
+  term <- setupTermFromEnv
   let reader = either (const plain) id $
         case (uriScheme uri, map toLower $ takeExtension $ uriPath uri) of
           -- some exceptions and special cases (might be better to make
@@ -130,7 +129,7 @@ readDoc cmd uri = do
             -- unknown or unrecognized item type
             _ -> byExtension ext <|> gopher
           (_, ext) -> byExtension ext
-      cols = maybe 80 id $ TI.getCapability term TI.termColumns
+      cols = maybe 80 id $ getCapability term termColumns
       opts = def { P.readerColumns = cols }
   P.runIO $ case reader of
     (P.TextReader f, _) -> f opts $ case decodeUtf8' out of
@@ -162,9 +161,24 @@ data RS = RS { indentationLevel :: Int
              , columns :: Int
              } deriving (Show, Eq)
 
+-- | A styled string.
+data Styled = Plain String
+            | Underline Styled
+            | Bold Styled
+            | Emph Styled
+            | Fg Color Styled
+            deriving (Show, Eq)
+
+-- | Just for convenience.
+instance IsString Styled where
+  fromString = Plain
+
+-- | A line of styled elements.
+type StyledLine = [Styled]
+
 -- | This is what gets rendered.
 data RendererOutput = RLink URI
-                    | RLine (Colored String)
+                    | RLine StyledLine
                     | RIdentifier String Int
                     deriving (Show, Eq)
 
@@ -175,7 +189,7 @@ rLinks ((RLink l):xs) = l : rLinks xs
 rLinks (_:xs) = rLinks xs
 
 -- | Extracts text lines.
-rLines :: [RendererOutput] -> [Colored String]
+rLines :: [RendererOutput] -> [StyledLine]
 rLines [] = []
 rLines ((RLine l):xs) = l : rLines xs
 rLines (_:xs) = rLines xs
@@ -214,7 +228,7 @@ storeLink u = do
   pure $ linkCount st
 
 -- | Stores text lines.
-storeLines :: [Colored String] -> Renderer ()
+storeLines :: [StyledLine] -> Renderer ()
 storeLines l = do
   modify (\s -> s { lineNumber = lineNumber s + length l })
   tell $ map RLine l
@@ -236,26 +250,28 @@ withIndent x = do
   pure r
 
 -- | Renders indented (with the current indent level) lines.
-indented :: [Colored String] -> Renderer ()
+indented :: [StyledLine] -> Renderer ()
 indented strings = do
   st <- get
   let indent = if bulleted st
                then indentationLevel st + 2
                else maybe (indentationLevel st)
                     ((indentationLevel st + 2 +) . length . show) (ordered st)
-      pad = map (fromString (replicate indent ' ') <>)
+      pad = map (fromString (replicate indent ' ') :)
   case ( fitLines ((columns st) - indent) strings
        , bulleted st
        , ordered st) of
     ([], _, _) -> pure ()
     (x:xs, True, _) -> storeLines $
-      (fromString (replicate (indentationLevel st) ' ') <> Fg Yellow "* " <> x)
+      (fromString (replicate (indentationLevel st) ' ')
+       : Fg Yellow "* "
+       : x)
       : pad xs
     (x:xs, _, Just n) -> do
-      storeLines $ (mconcat [ fromString (replicate (indentationLevel st) ' ')
-                            , Fg Yellow $ fromString (show n ++ ".")
-                            , " "
-                            , x])
+      storeLines $
+        (fromString (replicate (indentationLevel st) ' ')
+         : Fg Yellow (fromString (show n ++ ". "))
+         : x)
         : pad xs
       modify (\s -> s { ordered = Just (n + 1) })
     (xs, _, _) -> storeLines $ pad xs
@@ -263,27 +279,33 @@ indented strings = do
 -- This may be unreliable, especially for resulting length estimation,
 -- but usually works. Maybe improve someday.
 -- | Returns a string as it would be shown on a dumb terminal.
-uncolored :: Colored String -> String
-uncolored s = showColoredS TermDumb s ""
+unstyled :: StyledLine -> String
+unstyled = concatMap unstyled'
+  where
+    unstyled' (Plain s) = s
+    unstyled' (Main.Underline s) = unstyled' s
+    unstyled' (Main.Bold s) = unstyled' s
+    unstyled' (Main.Emph s) = unstyled' s
+    unstyled' (Fg _ s) = unstyled' s
 
--- todo: deal with non-breaking spaces
 -- | Fits words into terminal lines of a given width.
 fitLines :: Int
          -- ^ Line width.
-         -> [Colored String]
+         -> [[Styled]]
          -- ^ Strings: usually words and similar short elements.
-         -> [Colored String]
+         -> [StyledLine]
          -- ^ Fitted lines.
-fitLines maxLen inlineBits =
-  map mconcat $ map reverse $ fitWords [] 0 inlineBits
+fitLines maxLen inlineBits = concatMap (map reverse . fitWords [] 0) inlineBits
   where
+    fitWords :: [Styled] -> Int -> [Styled] -> [StyledLine]
+    -- fitWords curLine curLen (w:ws) = [[fromString $ show (w:ws)]]
     fitWords curLine curLen (w:ws)
       -- handle newline characters
-      | uncolored w == "\n" = curLine : fitWords [] 0 ws
+      | unstyled [w] == "\n" = curLine : fitWords [] 0 ws
       -- a new line
-      | curLen == 0 = fitWords [w] (length $ uncolored w) ws
+      | curLen == 0 = fitWords [w] (length $ unstyled [w]) ws
       -- add a word to a line
-      | otherwise = let wLen = length (uncolored w)
+      | otherwise = let wLen = length (unstyled [w])
                         spaceAhead = case ws of
                                        (" " : _) -> True
                                        _ -> False
@@ -301,24 +323,26 @@ fitLines maxLen inlineBits =
 
 -- | A helper function to put inline elements between two strings
 -- (such as parens or quotes).
-wrappedInlines :: Colored String
+wrappedInlines :: Styled
                -- ^ String on the left.
-               -> Colored String
+               -> Styled
                -- ^ String on the right.
                -> [P.Inline]
                -- ^ Inlines to wrap.
-               -> Renderer [Colored String]
+               -> Renderer [Styled]
                -- ^ Resulting inlines.
 wrappedInlines s e r = do
   r' <- concat <$> mapM readInline r
   pure $ s : r' ++ [e]
 
--- | Reads an inline element, producing strings. Doesn't render them
--- (i.e., using 'Writer') on its own, but collects links.
-readInline :: P.Inline -> Renderer [Colored String]
-readInline (P.Str s) = pure $ intersperse " " $ map fromString $ words s
-readInline (P.Emph s) = concatMap (fmap $ Style Italic) <$> mapM readInline s
-readInline (P.Strong s) = concatMap (fmap $ Style Bold) <$> mapM readInline s
+-- | Reads an inline element, producing styled strings. Doesn't render
+-- them (i.e., using 'Writer') on its own, but collects links.
+readInline :: P.Inline -> Renderer [Styled]
+readInline (P.Str s)
+  | all isSpace s = pure []
+  | otherwise = pure [fromString s]
+readInline (P.Emph s) = concatMap (map Main.Emph) <$> mapM readInline s
+readInline (P.Strong s) = concatMap (map Main.Bold) <$> mapM readInline s
 readInline (P.Strikeout s) = wrappedInlines "-" "-" s
 readInline (P.Superscript s) = wrappedInlines "^{" "}" s
 readInline (P.Subscript s) = wrappedInlines "_{" "}" s
@@ -328,49 +352,50 @@ readInline (P.Quoted P.DoubleQuote s) = wrappedInlines "“" "”" s
 readInline (P.Cite _ s) = concat <$> mapM readInline s
 readInline (P.Code attr s) = do
   storeAttr attr
-  pure $ map fromString $ intersperse "\n" $ lines s
-readInline P.Space = pure . pure $ fromString " "
-readInline P.SoftBreak = pure . pure $ fromString " "
-readInline P.LineBreak = pure . pure $ fromString "\n"
-readInline (P.Math _ s) = pure . pure $ fromString s
-readInline (P.RawInline _ s) = pure . pure $ fromString s
+  pure . map fromString $ intersperse "\n" $ lines s
+readInline P.Space = pure [" "]
+readInline P.SoftBreak = pure [" "]
+readInline P.LineBreak = pure ["\n"]
+readInline (P.Math _ s) = pure [fromString s]
+readInline (P.RawInline _ s) = pure [fromString s]
 readInline (P.Link attr alt (url, title)) = do
   storeAttr attr
   case parseURIReference url of
     Just uri -> do
       a <- mapM readInline alt
-      let t = case (title, a) of
+      let t = case (title, concat a) of
             ("", []) -> [fromString url]
-            ("", alt') -> concat alt'
+            ("", alt') -> alt'
             (title', []) -> [fromString title']
-            (_, alt') -> concat alt'
+            (_, alt') -> alt'
       cnt <- storeLink uri
       let color = case uri of
             (URI "" Nothing "" "" ('#':_)) -> Magenta
             _ -> Cyan
-      pure $ map (Fg color) t ++
-        [Fg Blue (mconcat ["[", fromString $ show cnt, "]"])]
-    Nothing -> pure . pure $ fromString title
+      pure $ (map $ Fg color) t ++
+        [Fg Blue $ fromString (concat ["[", show cnt, "]"])]
+    Nothing -> pure [fromString title]
 readInline (P.Image attr alt (url, title)) =
   (Fg Red "(image) " :) <$> readInline (P.Link attr alt (url, title))
-readInline (P.Note _) = pure $ pure "(note: todo)"
+readInline (P.Note _) = pure . pure $ "(note: todo)"
 readInline (P.Span attr i) = do
   storeAttr attr
   concat <$> mapM readInline i
 
+readInlines :: [P.Inline] -> Renderer [StyledLine]
+readInlines i = pure . concat <$> mapM readInline i
+
 -- | Renders a block element.
 renderBlock :: P.Block -> Renderer ()
-renderBlock (P.Plain i) = indented =<< concat <$> mapM readInline i
-renderBlock (P.Para i) = do
-  indented =<< concat <$> mapM readInline i
-  storeLines [""]
+renderBlock (P.Plain i) = indented =<< readInlines i
+renderBlock (P.Para i) = (indented =<< readInlines i) >> storeLines [[""]]
 renderBlock (P.LineBlock i) =
-  indented =<< concatMap mconcat <$> mapM (mapM readInline) i
+  indented =<< concat <$> mapM (mapM readInline) i
 renderBlock (P.CodeBlock attr s) = do
   storeAttr attr
-  indented $ map fromString $ intersperse "\n" $ lines s
+  indented $ map (pure . fromString) $ lines s
 renderBlock (P.RawBlock _ s) =
-  indented $ map fromString $ intersperse "\n" $ lines s
+  indented $ map (pure . fromString) $ lines s
 renderBlock (P.BlockQuote bs) = renderBlocks bs
 renderBlock (P.OrderedList _ bs) = do
   st <- get
@@ -386,32 +411,33 @@ renderBlock (P.BulletList bs) = do
   modify (\s -> s { bulleted = b })
 renderBlock (P.DefinitionList dl) =
   let renderDefinition (term, definition) = do
-        term' <- concat <$> mapM readInline term
-        indented term'
+        indented =<< readInlines term
         mapM_ renderBlocks definition
   in mapM_ renderDefinition dl
 renderBlock (P.Header _ attr i) = do
   storeAttr attr
-  strings <- concat <$> mapM readInline i
-  indented $ "\n" : map (Fg Green . Style Bold . Style Underline) strings
+  strings <- readInlines i
+  storeLines [[""]]
+  indented $ map (map $ Fg Green . Main.Bold . Main.Underline) strings
+  storeLines [[""]]
 renderBlock P.HorizontalRule = do
   st <- get
-  indented [fromString $ replicate (columns st - indentationLevel st * 2) '-']
+  indented [[fromString $ replicate (columns st - indentationLevel st * 2) '-']]
 renderBlock (P.Table caption _ widths headers rows) = do
   -- todo: don't ignore alignments, improve relative widths
   -- calculation and handling.
-  indented =<< concat <$> mapM readInline caption
+  indented =<< readInlines caption
   mapM_ (\r -> renderBlock P.HorizontalRule >> tableRow r) (headers : rows)
   renderBlock P.HorizontalRule
   where
-    tableCell :: Int -> [P.Block] -> Renderer [Colored String]
+    tableCell :: Int -> [P.Block] -> Renderer [StyledLine]
     tableCell w blocks = do
       st <- get
       let l = runRenderer w (linkCount st) (lineNumber st) $
             mapM_ renderBlock blocks
       mapM_ storeLink $ rLinks l
       pure $ map
-        (\x -> x <> Value (replicate (w - length (uncolored x)) ' '))
+        (\x -> x ++ [fromString (replicate (w - length (unstyled x)) ' ')])
         $ rLines l
     tableRow :: [[P.Block]] -> Renderer ()
     tableRow cols = do
@@ -424,8 +450,9 @@ renderBlock (P.Table caption _ widths headers rows) = do
       cells <- zipWithM tableCell widths' cols
       let maxLines = foldr (max . length) 0 cells
           padded = zipWith (\w c -> c ++ replicate (maxLines - length c)
-                             (fromString $ replicate w ' ')) widths' cells
-      indented $ map (mconcat . intersperse (Value " | ")) $ transpose padded
+                             [fromString $ replicate w ' ']) widths' cells
+      indented $ map (mconcat . intersperse (pure $ fromString " | "))
+        $ transpose padded
 renderBlock (P.Div attr b) = do
   storeAttr attr
   renderBlocks b
@@ -535,11 +562,25 @@ data LoopState = LS { history :: Sliding (URI, P.Pandoc)
                     , embedded :: Bool
                     } deriving (Show)
 
+-- | Propertizes a styled string for a given terminal.
+propertize :: Terminal -> Styled -> TermOutput
+propertize _ (Plain s) = termText s
+propertize t (Fg clr s) = maybe id (\f -> f clr)
+  (getCapability t withForegroundColor) $ propertize t s
+propertize t (Main.Bold s) =
+  maybe id id (getCapability t withBold) $ propertize t s
+propertize t (Main.Emph s) =
+  maybe id id (getCapability t withStandout) $ propertize t s
+propertize t (Main.Underline s) =
+  maybe id id (getCapability t withUnderline) $ propertize t s
+
 -- | Prints rendered lines.
-showLines :: MonadIO m => [Colored String] -> StateT LoopState m ()
+showLines :: MonadIO m => [StyledLine] -> StateT LoopState m ()
 showLines ls = liftIO $ do
-  term <- getTerm
-  mapM_ (\s -> printColoredS term s >> putChar '\n') ls
+  term <- setupTermFromEnv
+  let nl = maybe (termText "\n") id $ getCapability term newline
+  runTermOutput term . mconcat $
+    map (\l -> mconcat (map (propertize term) l) <#> nl) ls
 
 -- | Shows a list of strings as an s-expression
 list :: [String] -> String
@@ -557,7 +598,9 @@ showSexps ro =
   -- would be nicer to use some library for this, but they tend to be
   -- abandoned, and the task is simple enough to do it here
   putSexpLn [ "render"
-            , list $ "lines" : map (list . pure . showSexp) (rLines ro)
+            , list $ "lines" :
+              map (list . pure . concat . intersperse " " . map showSexp)
+              (rLines ro)
             , list $ "identifiers"
               : map (\(i, l) -> list [encodeStr i, show l]) (rIdentifiers ro)
             , list $ "links"
@@ -567,30 +610,26 @@ showSexps ro =
     escape '\\' = "\\\\"
     escape '"' = "\\\""
     escape other = pure other
-    showSexp :: Colored String -> String
-    -- no need for nils since the pairs are flattened
-    showSexp Nil = ""
-    showSexp (Value x) = encodeStr x
-    showSexp (Style s c) = concat ["(style ", show s, " ", showSexp c, ")"]
-    showSexp (Unstyle s c) = concat ["(unstyle ", show s, " ", showSexp c, ")"]
-    showSexp (Fg clr c) = concat ["(fg (", show clr, ") ", showSexp c, ")"]
-    showSexp (Bg clr c) = concat ["(bg (", show clr, ") ", showSexp c, ")"]
-    -- pairs are not important here, flattening at once
-    showSexp (Pair x y) = concat [showSexp x, " ", showSexp y]
+    showSexp :: Styled -> String
+    showSexp (Plain s) = encodeStr s
+    showSexp (Fg clr s) = list ["fg", show clr, showSexp s]
+    showSexp (Bold s) = list ["style", "bold", showSexp s]
+    showSexp (Underline s) = list ["style", "underline", showSexp s]
+    showSexp (Emph s) = list ["style", "italic", showSexp s]
 
 -- | Renders a parsed document.
 renderDoc :: MonadIO m => P.Pandoc -> StateT LoopState m ()
 renderDoc (P.Pandoc _ blocks) = do
-  term <- liftIO TI.setupTermFromEnv
+  term <- liftIO setupTermFromEnv
   st <- get
-  let cols = maybe 80 id $ TI.getCapability term TI.termColumns
+  let cols = maybe 80 id $ getCapability term termColumns
       l = runRenderer cols 0 1 $ mapM_ renderBlock blocks
       textLines = rLines l
   modify (\s -> s { rendered = l })
   if embedded st
     then showSexps l
     else do
-    let rows = maybe 25 id (TI.getCapability term TI.termLines) - 1
+    let rows = maybe 25 id (getCapability term termLines) - 1
     showLines $ if paginate (conf st)
                 then take rows textLines
                 else textLines
@@ -666,8 +705,8 @@ command (GoTo u@(URI _ _ _ _ ('#':xs))) = do
   case (lookup xs (rIdentifiers $ rendered st), embedded st) of
     (Nothing, _) -> putErrLn $ "Unknown identifier: " ++ xs
     (Just x, False) -> do
-      term <- liftIO TI.setupTermFromEnv
-      let lineCount = maybe 25 id (TI.getCapability term TI.termLines)
+      term <- liftIO setupTermFromEnv
+      let lineCount = maybe 25 id (getCapability term termLines)
       when (x + lineCount - 2 > position st) $ do
         -- scroll to the given position without skipping anything
         showLines $ take (x - position st + lineCount - 2) $
@@ -698,8 +737,8 @@ command Forward = do
     _ -> liftIO $ putErrLn "Nowhere to go"
 command More = do
   st <- get
-  term <- liftIO TI.setupTermFromEnv
-  let lineCount' = maybe 25 id (TI.getCapability term TI.termLines)
+  term <- liftIO setupTermFromEnv
+  let lineCount' = maybe 25 id (getCapability term termLines)
       lineCount = lineCount' - div lineCount' 3
   showLines $ take lineCount $ drop (position st) (rLines $ rendered st)
   modify (\s -> s { position = position st + lineCount })
