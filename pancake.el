@@ -93,7 +93,7 @@
   "Foreground face for white color."
   :group 'pancake)
 
-(defcustom pancake-command '("pancake")
+(defcustom pancake-command '("pancake" "--embedded")
   "A command that runs pancake, along with its arguments"
   :group 'pancake)
 

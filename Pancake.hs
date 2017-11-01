@@ -770,7 +770,6 @@ eventLoop = do
 main :: IO ()
 main = do
   args <- getArgs
-  insideEmacs <- lookupEnv "INSIDE_EMACS"
   _ <- runStateT (loadConfig >> eventLoop) $
-    LS ([],[]) 0 [] def (isJust insideEmacs || "--embedded" `elem` args)
+    LS ([],[]) 0 [] def ("--embedded" `elem` args)
   pure ()
