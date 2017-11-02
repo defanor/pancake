@@ -134,7 +134,8 @@
                :buffer p-buf
                :command pancake-command
                :stderr (make-pipe-process
-                        :name "*pancake-stderr*"
+                        :name "pancake-stderr"
+                        :buffer (generate-new-buffer "*pancake-stderr*")
                         :filter 'pancake-process-stderr-filter
                         :sentinel 'pancake-process-stderr-sentinel)
                :filter 'pancake-process-filter
