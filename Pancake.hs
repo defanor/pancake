@@ -433,11 +433,12 @@ renderBlock (P.DefinitionList dl) =
         indented =<< readInlines term
         mapM_ renderBlocks definition
   in mapM_ renderDefinition dl
-renderBlock (P.Header _ attr i) = do
+renderBlock (P.Header level attr i) = do
   storeAttr attr
   strings <- readInlines i
   storeLines [[""]]
-  indented $ map (map $ Fg Green . Main.Bold . Main.Underline) strings
+  indented $ map (map (Fg Green) . ([fromString (replicate level '#'), " "] ++)
+                  . (map (Main.Bold . Main.Underline))) strings
   storeLines [[""]]
 renderBlock P.HorizontalRule = do
   st <- get
