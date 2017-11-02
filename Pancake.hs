@@ -674,8 +674,11 @@ loadDocument u' = do
             -- handle relative URIs
             (_, False, ((cur, _):_, _)) -> relativeTo u' cur
             _ -> u'
+      uScheme = case uriScheme u of
+        [] -> "unknown"
+        (_:s) -> s
       cmd = maybe (defaultCommand $ conf st) id $
-        M.lookup (init $ uriScheme u) (commands $ conf st)
+        M.lookup uScheme (commands $ conf st)
       ext = case takeExtension $ uriPath u of
         ('.':xs) -> map toLower xs
         other -> other
