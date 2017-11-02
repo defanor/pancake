@@ -43,6 +43,7 @@ import qualified System.IO as SIO
 import Data.Char
 import qualified Data.Text as T
 import Data.Text.Encoding (decodeUtf8')
+import System.IO.Error
 
 
 -- | Prints a line into stderr.
@@ -811,26 +812,30 @@ command Quit = liftIO $ do
 -- | Reads commands, runs them.
 eventLoop :: MonadIO m => StateT LoopState m ()
 eventLoop = do
-  cmd <- liftIO $ getLine
+  cmd' <- liftIO $ try getLine
+  let onErr e = unless (isEOFError e)
+                (putErrLn ("Unexpected error: " ++ show e))
+                >> pure Quit
   st <- get
-  let c = case cmd of
-        "q" -> Quit
-        "b" -> Back
-        "f" -> Forward
-        "r" -> Reload
-        "re" -> ReloadConfig
-        "h" -> Help
-        "?" -> ShowCurrent
-        _ -> case reads cmd of
-          [(n, "")] -> Follow n
-          [(n, "?")] -> Show n
-          _ -> case words cmd of
-            [] -> More
-            (s:q) -> case M.lookup s (shortcuts (conf st)) of
-              Just u -> Shortcut u $ unwords q
-              Nothing -> case parseURIReference cmd of
-                           Just uri -> GoTo uri
-                           Nothing -> Help
+  c <- flip (either onErr) cmd' $ \cmd -> pure $
+    case cmd of
+      "q" -> Quit
+      "b" -> Back
+      "f" -> Forward
+      "r" -> Reload
+      "re" -> ReloadConfig
+      "h" -> Help
+      "?" -> ShowCurrent
+      _ -> case reads cmd of
+        [(n, "")] -> Follow n
+        [(n, "?")] -> Show n
+        _ -> case words cmd of
+          [] -> More
+          (s:q) -> case M.lookup s (shortcuts (conf st)) of
+            Just u -> Shortcut u $ unwords q
+            Nothing -> case parseURIReference cmd of
+                         Just uri -> GoTo uri
+                         Nothing -> Help
   command c
   when (c /= Quit) eventLoop
 
