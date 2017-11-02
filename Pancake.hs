@@ -441,7 +441,8 @@ renderBlock (P.Header _ attr i) = do
   storeLines [[""]]
 renderBlock P.HorizontalRule = do
   st <- get
-  indented [[fromString $ replicate (columns st - indentationLevel st * 2) '-']]
+  indented [[Fg Black $
+             fromString $ replicate (columns st - indentationLevel st * 2) '-']]
 renderBlock (P.Table caption _ widths headers rows) = do
   -- todo: don't ignore alignments
   indented =<< readInlines caption
