@@ -431,10 +431,18 @@ renderBlock P.HorizontalRule = do
   st <- get
   indented [[fromString $ replicate (columns st - indentationLevel st * 2) '-']]
 renderBlock (P.Table caption _ widths headers rows) = do
-  -- todo: don't ignore alignments, improve relative widths
-  -- calculation and handling.
+  -- todo: don't ignore alignments
   indented =<< readInlines caption
-  mapM_ (\r -> renderBlock P.HorizontalRule >> tableRow r) (headers : rows)
+  -- Use pandoc-provided widths if they are set, calculate them
+  -- otherwise.
+  let widthsAreSet = case widths of
+        [] -> False
+        w -> minimum w /= maximum w
+  ws <- if widthsAreSet then pure widths else do
+    lens <- map sum . transpose <$>
+      mapM (mapM (\c -> (length . unstyled . concat) <$> tableCell 80 c)) rows
+    pure $ map (\l -> fromIntegral l / fromIntegral (sum lens)) lens
+  mapM_ (\r -> renderBlock P.HorizontalRule >> tableRow ws r) (headers : rows)
   renderBlock P.HorizontalRule
   where
     tableCell :: Int -> [P.Block] -> Renderer [StyledLine]
@@ -446,19 +454,16 @@ renderBlock (P.Table caption _ widths headers rows) = do
       pure $ map
         (\x -> x ++ [fromString (replicate (w - length (unstyled x)) ' ')])
         $ rLines l
-    tableRow :: [[P.Block]] -> Renderer ()
-    tableRow cols = do
+    tableRow :: [Double] -> [[P.Block]] -> Renderer ()
+    tableRow ws cols = do
       st <- get
-      let maxWidth = columns st - indentationLevel st
-          widths' = map (\w -> floor (fromIntegral maxWidth * w - 3)) $
-            if any (/= 0) widths
-            then widths
-            else replicate (length widths) (1 / fromIntegral (length widths))
+      let maxWidth = columns st - indentationLevel st - ((length cols - 1) * 3)
+          widths' = map (\w -> floor (fromIntegral maxWidth * w)) ws
       cells <- zipWithM tableCell widths' cols
       let maxLines = foldr (max . length) 0 cells
           padded = zipWith (\w c -> c ++ replicate (maxLines - length c)
                              [fromString $ replicate w ' ']) widths' cells
-      indented $ map (mconcat . intersperse (pure $ fromString " | "))
+      indented $ map (mconcat . intersperse (pure $ Fg Black " | "))
         $ transpose padded
 renderBlock (P.Div attr b) = do
   storeAttr attr
