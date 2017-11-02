@@ -385,8 +385,20 @@ readInline (P.Link attr alt (url, title)) = do
       pure $ (map $ Fg color) t ++
         [Fg Blue $ fromString (concat ["[", show cnt, "]"])]
     Nothing -> pure [fromString title]
-readInline (P.Image attr alt (url, title)) =
-  (Fg Red "(image) " :) <$> readInline (P.Link attr alt (url, title))
+readInline (P.Image attr alt (url, title)) = do
+  storeAttr attr
+  (Fg Red "img:" :) <$> case parseURIReference url of
+    Nothing -> pure [fromString title]
+    Just uri -> do
+      a <- mapM readInline alt
+      let t = case (title, concat a) of
+            ("", []) -> [fromString $ takeFileName $ uriPath uri]
+            ("", alt') -> alt'
+            (title', []) -> [fromString title']
+            (_, alt') -> alt'
+      cnt <- storeLink uri
+      pure $ (map $ Fg Cyan) t ++
+        [Fg Blue $ fromString (concat ["[", show cnt, "]"])]
 readInline (P.Note _) = pure . pure $ "(note: todo)"
 readInline (P.Span attr i) = do
   storeAttr attr
