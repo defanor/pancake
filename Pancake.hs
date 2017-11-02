@@ -152,12 +152,16 @@ readDoc cmd uri = do
 
 -- * Rendering
 
+-- | The type of a list item that should be rendered next.
+data Listing = Bulleted
+             | Ordered Int
+             deriving (Show, Eq)
+
 -- | Renderer state.
 data RS = RS { indentationLevel :: Int
              , linkCount :: Int
              , lineNumber :: Int
-             , bulleted :: Bool
-             , ordered :: Maybe Int
+             , listing :: Maybe Listing
              , columns :: Int
              } deriving (Show, Eq)
 
@@ -217,7 +221,7 @@ runRenderer :: Int
             -> [RendererOutput]
             -- ^ Collected links and text lines.
 runRenderer cols ls ln r = snd $ fst $ runState (runWriterT r)
-  (RS 0 ls ln False Nothing cols)
+  (RS 0 ls ln Nothing cols)
 
 -- | Stores a link, increasing the counter
 storeLink :: URI -> Renderer Int
@@ -249,32 +253,38 @@ withIndent x = do
   modify (\s -> s { indentationLevel = indentationLevel s - 1 })
   pure r
 
+-- | Reads indentation level, runs a renderer, restores the original
+-- indentation level.
+keepIndent :: Renderer a -> Renderer a
+keepIndent r = do
+  st <- get
+  ret <- r
+  modify $ \s -> s { indentationLevel = indentationLevel st }
+  pure ret
+
 -- | Renders indented (with the current indent level) lines.
 indented :: [StyledLine] -> Renderer ()
-indented strings = do
+indented slines = do
   st <- get
-  let indent = if bulleted st
-               then indentationLevel st + 2
-               else maybe (indentationLevel st)
-                    ((indentationLevel st + 2 +) . length . show) (ordered st)
-      pad = map (fromString (replicate indent ' ') :)
-  case ( fitLines ((columns st) - indent) strings
-       , bulleted st
-       , ordered st) of
-    ([], _, _) -> pure ()
-    (x:xs, True, _) -> storeLines $
-      (fromString (replicate (indentationLevel st) ' ')
-       : Fg Yellow "* "
-       : x)
-      : pad xs
-    (x:xs, _, Just n) -> do
-      storeLines $
-        (fromString (replicate (indentationLevel st) ' ')
-         : Fg Yellow (fromString (show n ++ ". "))
-         : x)
-        : pad xs
-      modify (\s -> s { ordered = Just (n + 1) })
-    (xs, _, _) -> storeLines $ pad xs
+  -- The following blocks of the same list item should not be marked.
+  modify $ \s -> s { listing = Nothing }
+  let il = indentationLevel st
+      prefix = case listing st of
+        Nothing -> ""
+        (Just Bulleted) -> Fg Yellow "* "
+        (Just (Ordered n)) -> Fg Yellow $ fromString $ show n ++ ". "
+      prefixLen = length $ unstyled [prefix]
+      indent = il + prefixLen
+      fittedLines = fitLines (columns st - indent) slines
+      pad = (fromString (replicate indent ' ') :)
+      padFirst = (\x -> fromString (replicate il ' ') : prefix : x)
+  -- The following blocks of the same list item should be indented
+  -- with the same level. This should be reset to the original value
+  -- where the listing type is getting set.
+  modify $ \s -> s { indentationLevel = indent }
+  case fittedLines of
+    [] -> pure ()
+    (l:ls) -> storeLines $ padFirst l : map pad ls
 
 -- This may be unreliable, especially for resulting length estimation,
 -- but usually works. Maybe improve someday.
@@ -382,6 +392,7 @@ readInline (P.Span attr i) = do
   storeAttr attr
   concat <$> mapM readInline i
 
+-- | Reads lines of inline elements.
 readInlines :: [P.Inline] -> Renderer [StyledLine]
 readInlines i = pure . concat <$> mapM readInline i
 
@@ -398,17 +409,13 @@ renderBlock (P.RawBlock _ s) =
   indented $ map (pure . fromString) $ lines s
 renderBlock (P.BlockQuote bs) = renderBlocks bs
 renderBlock (P.OrderedList _ bs) = do
-  st <- get
-  let o = ordered st
-  put (st { ordered = Just 1 })
-  mapM_ renderBlocks bs
-  modify (\s -> s { ordered = o })
+  zipWithM_ (\b n -> modify (\s -> s { listing = Just (Ordered n) })
+                     >> keepIndent (mapM_ renderBlock b)) bs [1..]
+  modify $ \s -> s { listing = Nothing }
 renderBlock (P.BulletList bs) = do
-  st <- get
-  let b = bulleted st
-  put (st { bulleted = True })
-  mapM_ renderBlocks bs
-  modify (\s -> s { bulleted = b })
+  mapM_ (\b -> modify (\s -> s { listing = Just Bulleted })
+               >> keepIndent (mapM_ renderBlock b)) bs
+  modify $ \s -> s { listing = Nothing }
 renderBlock (P.DefinitionList dl) =
   let renderDefinition (term, definition) = do
         indented =<< readInlines term
