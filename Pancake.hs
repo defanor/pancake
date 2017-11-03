@@ -636,6 +636,7 @@ showSexps ro =
     encodeStr s = concat ["\"", concatMap escape s, "\""]
     escape '\\' = "\\\\"
     escape '"' = "\\\""
+    escape '\n' = "\\n"
     escape other = pure other
     showSexp :: Styled -> String
     showSexp (Plain s) = encodeStr s
