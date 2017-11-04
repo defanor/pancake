@@ -41,8 +41,7 @@ import Text.Pandoc.Readers.Gopher
 import Control.Applicative
 import qualified System.IO as SIO
 import Data.Char
-import qualified Data.Text as T
-import Data.Text.Encoding (decodeUtf8')
+import Data.Text.Encoding (decodeUtf8', decodeLatin1)
 import System.IO.Error
 
 
@@ -132,11 +131,13 @@ readDoc cmd uri = do
           (_, ext) -> byExtension ext
       cols = maybe 80 id $ getCapability term termColumns
       opts = def { P.readerColumns = cols }
-  P.runIO $ case reader of
-    (P.TextReader f, _) -> f opts $ case decodeUtf8' out of
-                                      Left _ -> T.empty
-                                      Right r -> r
-    (P.ByteStringReader f, _) -> f opts $ BL.fromStrict out
+  case reader of
+    (P.TextReader f, _) -> case decodeUtf8' out of
+      Left err -> do
+        putErrLn $ show err
+        P.runIO $ f opts $ decodeLatin1 out
+      Right r -> P.runIO $ f opts r
+    (P.ByteStringReader f, _) -> P.runIO $ f opts $ BL.fromStrict out
   where
     http ext = byExtension ext <|> html
     html = P.getReader "html"
