@@ -330,17 +330,22 @@ renderBlock (P.Table caption _ widths headers rows) = do
         w -> minimum w /= maximum w
   ws <- if widthsAreSet then pure widths else do
     lens <- map sum . transpose <$>
-      mapM (mapM (\c -> (length . unstyled . concat) <$> tableCell 80 c)) rows
+      mapM (mapM (\c -> (length . unstyled . concat . rLines)
+                   <$> renderCell 80 c)) rows
     pure $ map (\l -> fromIntegral l / fromIntegral (sum lens)) lens
   mapM_ (\r -> renderBlock P.HorizontalRule >> tableRow ws r) (headers : rows)
   renderBlock P.HorizontalRule
   where
+    renderCell :: Int -> [P.Block] -> Renderer [RendererOutput]
+    renderCell w blocks = do
+      st <- get
+      pure $ runRenderer w (linkCount st) (lineNumber st) $
+        mapM_ renderBlock blocks
     tableCell :: Int -> [P.Block] -> Renderer [StyledLine]
     tableCell w blocks = do
-      st <- get
-      let l = runRenderer w (linkCount st) (lineNumber st) $
-            mapM_ renderBlock blocks
+      l <- renderCell w blocks
       mapM_ storeLink $ rLinks l
+      tell $ map (\(s, i) -> RIdentifier s i) $ rIdentifiers l
       pure $ map
         (\x -> x ++ [fromString (replicate (w - length (unstyled x)) ' ')])
         $ rLines l
