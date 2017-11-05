@@ -27,6 +27,11 @@ executable pancake
   main-is:             Pancake.hs
   other-modules:       Text.Pandoc.Readers.Plain
                      , Text.Pandoc.Readers.Gopher
+                     , Pancake.Common
+                     , Pancake.Configuration
+                     , Pancake.Reading
+                     , Pancake.Rendering
+                     , Pancake.Printing
   build-depends:       base >= 4.9 && < 5
                      , bytestring >= 0.10.8.1 && < 1
                      , containers >= 0.5.7.1 && < 1
