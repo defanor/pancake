@@ -18,21 +18,48 @@ import qualified Data.ByteString.Char8 as BS
 import Network.URI
 import qualified Text.Pandoc as P
 import System.Process
-import Control.Exception
-import Control.Applicative
+import Control.Exception (handle, SomeException)
+import Control.Applicative ((<|>))
 import Data.Text.Encoding (decodeUtf8', decodeLatin1)
 import Data.Default
-import System.Console.Terminfo
+import System.Console.Terminfo (setupTermFromEnv, getCapability, termColumns)
 import System.FilePath
 import Data.Char
 import System.Exit
 import System.Environment
 import GHC.IO.Handle
+import Text.Parsec hiding ((<|>))
+import Text.Parsec.ByteString
 
 import Text.Pandoc.Readers.Plain
 import Text.Pandoc.Readers.Gopher
 import Pancake.Common
 
+
+-- | Metadata (header, URI, document type) parser.
+pMeta :: Parser (Maybe URI, Maybe String)
+pMeta = do
+  _ <- newline
+  _ <- string "-pancake-"
+  _ <- newline
+  u <- optionMaybe $ do
+    _ <- string "uri: "
+    u <- manyTill anyToken newline
+    maybe (fail "Failed to parse URI") pure $ parseURI u
+  t <- option Nothing $ do
+    _ <- string "type: "
+    optional $ try $ manyTill alphaNum (char '/')
+    t <- optionMaybe $ many1 alphaNum
+    _ <- manyTill anyToken newline
+    pure t
+  eof
+  pure (u, t)
+
+-- | Document body + metadata parser.
+pWithMeta :: Parser (BS.ByteString, (Maybe URI, Maybe String))
+pWithMeta = (,)
+            <$> BS.pack <$> manyTill anyToken (try $ lookAhead pMeta)
+            <*> pMeta
 
 -- | Retrieves a document. Prints an error message and returns an
 -- empty string on failure.
@@ -40,7 +67,7 @@ retrieve :: String
          -- ^ Shell command to use for retrieval.
          -> URI
          -- ^ Document URI.
-         -> IO BS.ByteString
+         -> IO (Maybe (BS.ByteString, Maybe URI, Maybe String))
          -- ^ Document contents.
 retrieve cmd uri = do
   putErrLn $ "Retrieving " ++ show uri
@@ -58,13 +85,13 @@ retrieve cmd uri = do
                     ++ envAuthority
   handle (\(e :: SomeException) ->
             putErrLn (concat ["Failed to run `", cmd, "`: ", show e])
-            >> pure BS.empty) $
+            >> pure Nothing) $
     withCreateProcess ((shell cmd) { env = Just environment
                                    , std_out = CreatePipe
                                    , std_err = CreatePipe
                                    , delegate_ctlc = True }) $
     \_ stdout stderr ph -> case stdout of
-      Nothing -> putErrLn "No stdout" >> pure BS.empty
+      Nothing -> putErrLn "No stdout" >> pure Nothing
       Just stdout' -> do
         hSetBinaryMode stdout' True
         out <- BS.hGetContents stdout'
@@ -78,20 +105,21 @@ retrieve cmd uri = do
               err <- BS.hGetContents stderr'
               putErrLn $ "stderr:\n" ++ BS.unpack err
           else putErrLn $ show uri
-        pure out
+        case parse pWithMeta (uriToString id uri "") out of
+          Left _ -> pure $ Just (out, Nothing, Nothing)
+          Right (bs, (u, t)) -> pure $ Just (bs, u, t)
 
--- | Reads a document: retrieves it and parses into a Pandoc
--- structure. The parser is chosen depending on the URI.
-readDoc :: String
-        -- ^ Shell command to use for retrieval.
+-- | Parses a document into a Pandoc structure. The parser is chosen
+-- depending on the document type (if one is provided) or its URI.
+readDoc :: BS.ByteString
+        -- ^ Raw document data.
         -> Maybe String
         -- ^ Document type.
         -> URI
         -- ^ Document URI.
         -> IO (Either P.PandocError P.Pandoc)
         -- ^ A parsed document.
-readDoc cmd dt uri = do
-  out <- retrieve cmd uri
+readDoc out dt uri = do
   term <- setupTermFromEnv
   let reader = either (const plain) id $
         maybe (Left "no type suggestions") (byExtension . ('.':)) dt
@@ -132,4 +160,5 @@ readDoc cmd dt uri = do
     byExtension ".ltx" = P.getReader "latex"
     byExtension ".tex" = P.getReader "latex"
     byExtension ".txt" = pure plain
+    byExtension ".plain" = pure plain
     byExtension ext = P.getReader $ tail ext

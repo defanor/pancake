@@ -46,7 +46,15 @@ externalViewers:
 commands:
   gopher: torify curl "${URI}"
   ssh: scp "${URI_REGNAME}:${URI_PATH}" /dev/stdout
-defaultCommand: curl -4 -L "${URI}"
+defaultCommand: ! 'curl -4 -L "${URI}" -w "
+
+  -pancake-
+
+  uri: %{url_effective}
+
+  type: %{content_type}
+
+  "'
 shortcuts:
   ddg: https://duckduckgo.com/lite/?q=
   wt: https://en.m.wiktionary.org/w/index.php?search=
@@ -56,18 +64,6 @@ shortcuts:
 historyDepth: 100
 paginate: true
 #+END_SRC
-
-* Excluded features
-
-The following features were not implemented, since the complication
-may be not worth the benefits, but maybe they will be in the future:
-
-- Usage of content types reported by network protocols: pancake relies
-  on URIs for format detection, what usually works, but can be
-  improved.
-- Semantic markup for embedding: it might be useful to provide
-  denotations to ~pancake-mode~ (and for embedding in general) in
-  order to buttonize links, render TeX math, embed images, etc.
 
 * Screenshots
 

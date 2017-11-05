@@ -56,9 +56,12 @@ instance ToJSON Config
 instance Default Config where
   def = Config {
     commands = M.fromList
-      [ ("ssh", "scp \"${URI_REGNAME}:${URI_PATH}\" /dev/stdout")
-      , ("gopher", "curl \"${URI}\"")]
+      [ ("ssh", "scp \"${URI_REGNAME}:${URI_PATH}\" /dev/stdout"
+                ++ " && echo -e '\n-pancake-'")
+      , ("gopher", "curl \"${URI}\""
+          ++ " -w \"\n-pancake-\n\"")]
     , defaultCommand = "curl -4 -L \"${URI}\""
+      ++ " -w \"\n-pancake-\nuri: %{url_effective}\ntype: %{content_type}\n\""
     , externalViewers = M.fromList $
       map (flip (,) "emacsclient -n \"${FILE}\"")
       ["hs", "cabal", "c", "h", "el", "scm", "idr"]

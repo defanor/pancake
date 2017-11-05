@@ -31,6 +31,7 @@ import System.Exit
 import Control.Exception
 import Data.Char
 import System.IO.Error
+import Control.Applicative
 
 import Pancake.Common
 import Pancake.Configuration
@@ -82,52 +83,56 @@ loadDocument :: MonadIO m
              -> URI
              -- ^ Document URI.
              -> StateT LoopState m (URI, Maybe P.Pandoc)
-loadDocument t u' = do
+loadDocument sType rawURI = do
   st <- get
-  let ddg = isPrefixOf "/l/?kh=-1&uddg=" $ uriToString id u' ""
-      u = case (ddg, uriIsAbsolute u', history st) of
-            -- fix DDG links (that's rather hacky, todo: improve)
-            (True, _, _) -> maybe u' id $
-              parseAbsoluteURI (unEscapeString $ drop 12 (uriQuery u'))
-            -- handle relative URIs
-            (_, False, ((cur, _):_, _)) -> relativeTo u' cur
-            _ -> u'
-      uScheme = case uriScheme u of
+  let ddg = isPrefixOf "/l/?kh=-1&uddg=" $ uriToString id rawURI ""
+      adjustedURI = case (ddg, uriIsAbsolute rawURI, history st) of
+        -- fix DDG links (that's rather hacky, todo: improve)
+        (True, _, _) -> maybe rawURI id $
+          parseAbsoluteURI (unEscapeString $ drop 12 (uriQuery rawURI))
+        -- handle relative URIs
+        (_, False, ((cur, _):_, _)) -> relativeTo rawURI cur
+        _ -> rawURI
+      uScheme = case uriScheme adjustedURI of
         [] -> "unknown"
-        (_:s) -> s
+        s -> init s
       cmd = maybe (defaultCommand $ conf st) id $
         M.lookup uScheme (commands $ conf st)
-      ext = case (t, takeExtension $ uriPath u) of
-        (Just x, _) -> x
-        (_, '.':xs) -> map toLower xs
-        (_, other) -> other
-  d <- liftIO $ do
-    case M.lookup ext (externalViewers $ conf st) of
-      Nothing -> do
-        doc <- readDoc cmd t u
-        case doc of
-          Left err -> do
-            putErrLn $ show err
-            pure mzero
-          Right r -> pure $ pure r
-      Just ev -> do
-        d <- retrieve cmd u
-        dir <- getXdgDirectory XdgCache "pancake"
-        let tmpPath = dir </> (takeFileName $ uriPath u)
-        handle
-          (\(e :: SomeException) ->
-             putErrLn (concat ["Failed to open `", tmpPath, "` with `"
-                              , cmd, "`: ", show e])) $ do
-          createDirectoryIfMissing True dir
-          BS.writeFile tmpPath d
-          curEnv <- getEnvironment
-          ec <- withCreateProcess
-            ((shell ev) { env = Just (("FILE", tmpPath) : curEnv) }) $
-            \_ _ _ p -> waitForProcess p
-          when (ec /= ExitSuccess) $
-            putErrLn $ concat ["An error occured. Exit code: ", show ec]
-        pure mzero
-  pure (u, d)
+  liftIO $ do
+    docData <- retrieve cmd adjustedURI
+    case docData of
+      Nothing -> pure (adjustedURI, mzero)
+      Just (rawDoc, mdURI, mdType) -> do
+        let effectiveURI = maybe adjustedURI id mdURI
+            fType = sType <|> mdType
+            ext = case (fType, takeExtension $ uriPath effectiveURI) of
+              (Just x, _) -> x
+              (_, '.':xs) -> map toLower xs
+              (_, other) -> other
+        case M.lookup ext (externalViewers $ conf st) of
+          Nothing -> do
+            doc <- readDoc rawDoc fType effectiveURI
+            case doc of
+              Left err -> do
+                putErrLn $ show err
+                pure (effectiveURI, mzero)
+              Right r -> pure (effectiveURI, pure r)
+          Just ev -> do
+            dir <- getXdgDirectory XdgCache "pancake"
+            let tmpPath = dir </> (takeFileName $ uriPath effectiveURI)
+            handle
+              (\(e :: SomeException) ->
+                 putErrLn (concat ["Failed to open `", tmpPath, "` with `"
+                                  , cmd, "`: ", show e])) $ do
+              createDirectoryIfMissing True dir
+              BS.writeFile tmpPath rawDoc
+              curEnv <- getEnvironment
+              ec <- withCreateProcess
+                ((shell ev) { env = Just (("FILE", tmpPath) : curEnv) }) $
+                \_ _ _ p -> waitForProcess p
+              when (ec /= ExitSuccess) $
+                putErrLn $ concat ["An error occured. Exit code: ", show ec]
+            pure (effectiveURI, mzero)
 
 -- | Visits an URI, updates history accordingly.
 goTo :: MonadIO m => Maybe String -> URI -> StateT LoopState m ()

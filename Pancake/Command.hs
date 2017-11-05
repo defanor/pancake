@@ -84,5 +84,6 @@ command c =
           [ basicCommand <?> "basic command"
           , followRef <?> "follow ref"
           , showRef <?> "show ref"
+          , shortcut (shortcuts c) <?> "shortcut"
           , goTo <?> "go to"
-          , shortcut (shortcuts c) <?> "shortcut"])
+          ])
