@@ -210,9 +210,11 @@ command Reload = do
 command Help = do
   st <- get
   liftIO $ do
-    putErrLn "[q]uit, [b]ack, [f]orward, [h]elp, [r]eload, [re]load config"
-    putErrLn "type a number to follow a link, \"<number>?\" to print its URI"
-    putErrLn "type an URI (absolute or relative) to open it"
+    putErrLn $ intercalate "\n" $
+      [ "[q]uit, [b]ack, [f]orward, [h]elp, [r]eload, [re]load config"
+      , "type a number to follow a link, \"?<number>\" to print its URI"
+      , "type an URI (absolute or relative) to open it"
+      , "prefix it with a type (html, txt, org, etc) to choose a reader"]
     when (paginate $ conf st) $ putErrLn "RET to scroll"
 command (Show n) = do
   st <- get
