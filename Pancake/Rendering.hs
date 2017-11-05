@@ -9,7 +9,8 @@ Document rendering: conversion from 'Pandoc' to 'RendererOutput'.
 
 {-# LANGUAGE OverloadedStrings #-}
 
-module Pancake.Rendering ( Styled(..)
+module Pancake.Rendering ( Denotation(..)
+                         , Styled(..)
                          , StyledLine
                          , RendererOutput(..)
                          , rLinks
@@ -34,12 +35,17 @@ data Listing = Bulleted
              | Ordered Int
              deriving (Show, Eq)
 
+data Denotation = Link URI
+                | Math String
+                deriving (Show, Eq)
+
 -- | A styled string.
 data Styled = Plain String
             | Underline Styled
             | Bold Styled
             | Emph Styled
             | Fg Color Styled
+            | Denote Denotation Styled
             deriving (Show, Eq)
 
 -- | Just for convenience.
@@ -173,6 +179,7 @@ unstyled = concatMap unstyled'
     unstyled' (Bold s) = unstyled' s
     unstyled' (Emph s) = unstyled' s
     unstyled' (Fg _ s) = unstyled' s
+    unstyled' (Denote _ s) = unstyled' s
 
 -- | Fits words into terminal lines of a given width.
 fitLines :: Int
@@ -193,6 +200,7 @@ fitLines maxLen inlineBits = concatMap (map reverse . fitWords [] 0) inlineBits
     splitStyled (Bold s) = map Bold $ splitStyled s
     splitStyled (Emph s) = map Emph $ splitStyled s
     splitStyled (Fg c s) = map (Fg c) $ splitStyled s
+    splitStyled (Denote d s) = map (Denote d) $ splitStyled s
     fitWords :: [Styled] -> Int -> [Styled] -> [StyledLine]
     fitWords curLine curLen (w:ws)
       -- handle newline characters
@@ -253,7 +261,7 @@ readInline (P.Code attr s) = do
 readInline P.Space = pure [" "]
 readInline P.SoftBreak = pure [" "]
 readInline P.LineBreak = pure ["\n"]
-readInline (P.Math _ s) = pure [fromString s]
+readInline (P.Math _ s) = pure [Denote (Math s) $ fromString s]
 readInline (P.RawInline _ s) = pure [fromString s]
 readInline (P.Link attr alt (url, title)) = do
   storeAttr attr
@@ -269,7 +277,7 @@ readInline (P.Link attr alt (url, title)) = do
       let color = case uri of
             (URI "" Nothing "" "" ('#':_)) -> Magenta
             _ -> Cyan
-      pure $ (map $ Fg color) t ++
+      pure $ (map $ Denote (Link uri) . Fg color) t ++
         [Fg Blue $ fromString (concat ["[", show cnt, "]"])]
     Nothing -> pure [fromString title]
 readInline (P.Image attr alt (url, title)) = do
@@ -284,7 +292,7 @@ readInline (P.Image attr alt (url, title)) = do
             (title', []) -> [fromString title']
             (_, alt') -> alt'
       cnt <- storeLink uri
-      pure $ (map $ Fg Cyan) t ++
+      pure $ (map $ Denote (Link uri) . Fg Cyan) t ++
         [Fg Blue $ fromString (concat ["[", show cnt, "]"])]
 readInline (P.Note _) = pure . pure $ "(note: todo)"
 readInline (P.Span attr i) = do

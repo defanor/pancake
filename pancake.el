@@ -164,26 +164,35 @@
                   "-"
                   (symbol-name attr))))
 
+(defun pancake-button-action (button)
+  "An action to be invoked on button activation."
+  (funcall 'browse-url (button-get button 'uri)))
+
 (defun pancake-print-elem (element)
   "Translate ELEMENT into a string."
   (if (stringp element)
-      element
-    (pcase element
-      (`(fg ,color . ,rest)
-       (let ((inner (pancake-print-line rest)))
+      (insert element)
+    (let ((start (point)))
+      (pcase element
+        (`(fg ,color . ,rest)
+         (pancake-print-line rest)
          (add-face-text-property
-          0 (length inner) (pancake-translate-color color 'foreground) t inner)
-         inner))
-      (`(style ,face . ,rest)
-       (let ((inner (pancake-print-line rest)))
-         (add-face-text-property 0 (length inner) face t inner)
-         inner))
-      (_ (format "Unexpected element: %S" element)))))
-
+          start (point) (pancake-translate-color color 'foreground) t))
+        (`(style ,face . ,rest)
+         (pancake-print-line rest)
+         (add-face-text-property start (point) face t))
+        (`(denotation (math . ,formula) . ,rest)
+         (pancake-print-line rest))
+        (`(denotation (link . ,uri) . ,rest)
+         (pancake-print-line rest)
+         (make-text-button start (point)
+                           'uri uri
+                           'action #'pancake-button-action))
+        (_ (format "Unexpected element: %S" element))))))
 
 (defun pancake-print-line (line)
   "Translate LINE (a list of elements) into a string"
-  (apply 'concat (mapcar 'pancake-print-elem line)))
+  (mapc 'pancake-print-elem line))
 
 (defun pancake-line-p (string)
   "Return t if STRING ends with a newline character."
@@ -207,7 +216,7 @@
                  ;; further manipulation
                  (setq pancake-current-uri (alist-get 'uri alist))
                  (dolist (line (alist-get 'lines alist))
-                   (insert (pancake-print-line line))
+                   (pancake-print-line line)
                    (newline))
                  (read-only-mode 1)
                  (goto-char (point-min)))
@@ -283,6 +292,20 @@
     (message "%s" pancake-current-uri)
     (kill-new pancake-current-uri)))
 
+(defun pancake-next-button ()
+  "Moves cursor to the next button."
+  (interactive)
+  (let ((next (next-button (point))))
+    (when next
+      (goto-char next))))
+
+(defun pancake-previous-button ()
+  "Moves cursor to the previous button."
+  (interactive)
+  (let ((prev (previous-button (point))))
+    (when prev
+      (goto-char prev))))
+
 (defun pancake-input (string)
   "Pancake input handler: opens minibuffer for input.
 Sets the initial contents to STRING, reads the rest, and passes
@@ -301,6 +324,10 @@ it to `pancake-process' as input."
         (define-key map (kbd str) (pancake-input str))))
     (define-key map (kbd "C-y") 'pancake-yank)
     (define-key map (kbd "<mouse-2>") 'pancake-yank-primary)
+    (define-key map (kbd "<mouse-8>") 'pancake-go-backward)
+    (define-key map (kbd "<mouse-9>") 'pancake-go-forward)
+    (define-key map (kbd "TAB") 'pancake-next-button)
+    (define-key map (kbd "<backtab>") 'pancake-previous-button)
     (define-key map (kbd "C-c C-c") 'pancake-interrupt)
     (define-key map (kbd "C-c C-u") 'pancake-display-current-uri)
     (define-key map (kbd "B") 'pancake-go-backward)

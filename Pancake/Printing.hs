@@ -25,12 +25,13 @@ propertize :: Terminal -> Styled -> TermOutput
 propertize _ (Plain s) = termText s
 propertize t (Fg clr s) = maybe id (\f -> f clr)
   (getCapability t withForegroundColor) $ propertize t s
-propertize t (Pancake.Rendering.Bold s) =
+propertize t (Bold s) =
   maybe id id (getCapability t withBold) $ propertize t s
-propertize t (Pancake.Rendering.Emph s) =
+propertize t (Emph s) =
   maybe id id (getCapability t withStandout) $ propertize t s
-propertize t (Pancake.Rendering.Underline s) =
+propertize t (Underline s) =
   maybe id id (getCapability t withUnderline) $ propertize t s
+propertize t (Denote _ s) = propertize t s
 
 -- | Prints rendered lines.
 showLines :: MonadIO m => [StyledLine] -> m ()
@@ -57,7 +58,7 @@ showSexps uri ro =
   -- abandoned, and the task is simple enough to do it here
   putSexpLn [ "render"
             , list $ "lines" :
-              map (list . pure . concat . intersperse " " . map showSexp)
+              map (list . pure . concat . intersperse " " . map showSexp . mergeStyled)
               (rLines ro)
             , list $ "identifiers"
               : map (\(i, l) -> list [encodeStr i, show l]) (rIdentifiers ro)
@@ -76,3 +77,29 @@ showSexps uri ro =
     showSexp (Bold s) = list ["style", "bold", showSexp s]
     showSexp (Underline s) = list ["style", "underline", showSexp s]
     showSexp (Emph s) = list ["style", "italic", showSexp s]
+    showSexp (Denote d s) = list [ "denotation"
+                                 , showDenotation d
+                                 , showSexp s]
+    showDenotation :: Denotation -> String
+    showDenotation (Link u) = list ["link", ".", encodeStr $ show u]
+    showDenotation (Math m) = list ["math", ".", encodeStr m]
+
+mergeStyled :: [Styled] -> [Styled]
+mergeStyled = foldr mergeStyled' []
+  where
+    mergeStyled' :: Styled -> [Styled] -> [Styled]
+    mergeStyled' s [] = [s]
+    mergeStyled' s (s':rest) = maybe (s:s':rest) (: rest) (tryMerge s s')
+
+tryMerge :: Styled -> Styled -> Maybe Styled
+tryMerge (Plain s) (Plain s') = pure $ Plain $ s ++ s'
+tryMerge (Fg clr s) (Fg clr' s')
+  | clr == clr' = Fg clr <$> tryMerge s s'
+  | otherwise = mzero
+tryMerge (Bold s) (Bold s') = Bold <$> tryMerge s s'
+tryMerge (Underline s) (Underline s') = Underline <$> tryMerge s s'
+tryMerge (Emph s) (Emph s') = Emph <$> tryMerge s s'
+tryMerge (Denote d s) (Denote d' s')
+  | d == d' = Denote d <$> tryMerge s s'
+  | otherwise = mzero
+tryMerge _ _ = mzero
