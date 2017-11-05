@@ -76,8 +76,13 @@ updateConfig = do
 
 -- | Decides what to do with a given URI; either returns a document or
 -- runs an external viewer. Used by both 'GoTo' and 'Reload'.
-loadDocument :: MonadIO m => URI -> StateT LoopState m (URI, Maybe P.Pandoc)
-loadDocument u' = do
+loadDocument :: MonadIO m
+             => Maybe String
+             -- ^ Document type.
+             -> URI
+             -- ^ Document URI.
+             -> StateT LoopState m (URI, Maybe P.Pandoc)
+loadDocument t u' = do
   st <- get
   let ddg = isPrefixOf "/l/?kh=-1&uddg=" $ uriToString id u' ""
       u = case (ddg, uriIsAbsolute u', history st) of
@@ -92,13 +97,14 @@ loadDocument u' = do
         (_:s) -> s
       cmd = maybe (defaultCommand $ conf st) id $
         M.lookup uScheme (commands $ conf st)
-      ext = case takeExtension $ uriPath u of
-        ('.':xs) -> map toLower xs
-        other -> other
+      ext = case (t, takeExtension $ uriPath u) of
+        (Just x, _) -> x
+        (_, '.':xs) -> map toLower xs
+        (_, other) -> other
   d <- liftIO $ do
     case M.lookup ext (externalViewers $ conf st) of
       Nothing -> do
-        doc <- readDoc cmd u
+        doc <- readDoc cmd t u
         case doc of
           Left err -> do
             putErrLn $ show err
@@ -124,9 +130,9 @@ loadDocument u' = do
   pure (u, d)
 
 -- | Visits an URI, updates history accordingly.
-goTo :: MonadIO m => URI -> StateT LoopState m ()
-goTo u' = do
-  (u, d) <- loadDocument u'
+goTo :: MonadIO m => Maybe String -> URI -> StateT LoopState m ()
+goTo t u' = do
+  (u, d) <- loadDocument t u'
   case d of
     Nothing -> pure ()
     Just doc -> do
@@ -137,11 +143,11 @@ goTo u' = do
 
 -- | Evaluates user commands.
 command :: MonadIO m => Command -> StateT LoopState m ()
-command (GoTo u@(URI _ _ _ _ ('#':xs))) = do
+command (GoTo t u@(URI _ _ _ _ ('#':xs))) = do
   -- follow an URI first, if it's not just a fragment
   case u of
     (URI "" Nothing "" "" _) -> pure ()
-    _ -> goTo u
+    _ -> goTo t u
   -- get to the fragment
   st <- get
   case (lookup xs (rIdentifiers $ rendered st), embedded st) of
@@ -155,11 +161,11 @@ command (GoTo u@(URI _ _ _ _ ('#':xs))) = do
           drop (position st) (rLines $ rendered st)
         modify (\s -> s { position = x + lineCount - 2 })
     (Just x, True) -> putSexpLn ["goto", show x]
-command (GoTo u) = goTo u
+command (GoTo t u) = goTo t u
 command (Follow i) = do
   st <- get
   if length (rLinks $ rendered st) > i
-    then command (GoTo $ rLinks (rendered st) !! i)
+    then command (GoTo Nothing $ rLinks (rendered st) !! i)
     else liftIO $ putErrLn "No such link"
 command Back = do
   st <- get
@@ -189,7 +195,7 @@ command Reload = do
   st <- get
   case history st of
     ((u, _):prev, next) -> do
-      (_, d) <- loadDocument u
+      (_, d) <- loadDocument Nothing u
       case d of
         Nothing -> pure ()
         Just doc -> do
@@ -213,7 +219,7 @@ command ShowCurrent = do
   case history st of
     ((u, _):_, _) -> liftIO $ putErrLn $ show u
     _ -> pure ()
-command (Shortcut u q) = command . GoTo . fromJust . parseURI $
+command (Shortcut u q) = command . GoTo Nothing . fromJust . parseURI $
   u ++ escapeURIString isReserved q
 command ReloadConfig = updateConfig
 command Quit = liftIO $ do

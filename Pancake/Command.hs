@@ -23,7 +23,8 @@ import Pancake.Configuration
 data Command = Quit
              | Follow Int
              | More
-             | GoTo URI
+             | GoTo (Maybe String) URI
+             -- ^ Document type, URI
              | Reload
              | Back
              | Forward
@@ -61,8 +62,9 @@ showRef = char '?' *> (Show . read <$> many1 digit) <* eof
 -- | 'GoTo' command parser.
 goTo :: Parser Command
 goTo = do
-  s <- manyTill anyChar eof
-  maybe (fail "Failed to parse URI") (pure . GoTo) $ parseURIReference s
+  f <- optionMaybe (try (many1 alphaNum <* space)) <?> "type"
+  s <- manyTill anyChar eof <?> "URI"
+  maybe (fail "Failed to parse URI") (pure . GoTo f) $ parseURIReference s
 
 -- | 'Shortcut' command parser.
 shortcut :: M.Map String String -> Parser Command

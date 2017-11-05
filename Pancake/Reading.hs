@@ -84,31 +84,34 @@ retrieve cmd uri = do
 -- structure. The parser is chosen depending on the URI.
 readDoc :: String
         -- ^ Shell command to use for retrieval.
+        -> Maybe String
+        -- ^ Document type.
         -> URI
         -- ^ Document URI.
         -> IO (Either P.PandocError P.Pandoc)
         -- ^ A parsed document.
-readDoc cmd uri = do
+readDoc cmd dt uri = do
   out <- retrieve cmd uri
   term <- setupTermFromEnv
   let reader = either (const plain) id $
-        case (uriScheme uri, map toLower $ takeExtension $ uriPath uri) of
-          -- some exceptions and special cases (might be better to make
-          -- this configurable)
-          ("http:", ext) -> http ext
-          ("https:", ext) -> http ext
-          ("gopher:", ext) -> case uriPath uri of
-            ('/':'1':_) -> gopher
-            ('/':'h':_) -> html
-            -- "0" should indicate plain text, but it's also the most
-            -- suitable option for non-html markup. Not sure about this
-            -- approach, but it's similar to ignoring HTTP content-type,
-            -- and will do for now: better to render documents nicely
-            -- when possible.
-            ('/':'0':_) -> byExtension ext
-            -- unknown or unrecognized item type
-            _ -> byExtension ext <|> gopher
-          (_, ext) -> byExtension ext
+        maybe (Left "no type suggestions") (byExtension . ('.':)) dt
+         <|> case (uriScheme uri, map toLower $ takeExtension $ uriPath uri) of
+               -- some exceptions and special cases (might be better to make
+               -- this configurable)
+               ("http:", ext) -> http ext
+               ("https:", ext) -> http ext
+               ("gopher:", ext) -> case uriPath uri of
+                 ('/':'1':_) -> gopher
+                 ('/':'h':_) -> html
+                 -- "0" should indicate plain text, but it's also the most
+                 -- suitable option for non-html markup. Not sure about this
+                 -- approach, but it's similar to ignoring HTTP content-type,
+                 -- and will do for now: better to render documents nicely
+                 -- when possible.
+                 ('/':'0':_) -> byExtension ext
+                 -- unknown or unrecognized item type
+                 _ -> byExtension ext <|> gopher
+               (_, ext) -> byExtension ext
       cols = maybe 80 id $ getCapability term termColumns
       opts = def { P.readerColumns = cols }
   case reader of
