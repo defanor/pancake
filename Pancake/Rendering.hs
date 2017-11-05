@@ -181,15 +181,26 @@ fitLines :: Int
          -- ^ Strings: usually words and similar short elements.
          -> [StyledLine]
          -- ^ Fitted lines.
+fitLines 0 _ = []
 fitLines maxLen inlineBits = concatMap (map reverse . fitWords [] 0) inlineBits
   where
+    splitStyled :: Styled -> [Styled]
+    splitStyled (Plain s)
+      | length s > maxLen = let (t, d) = splitAt maxLen s in
+          Plain t : splitStyled (Plain d)
+      | otherwise = [Plain s]
+    splitStyled (Underline s) = map Underline $ splitStyled s
+    splitStyled (Bold s) = map Bold $ splitStyled s
+    splitStyled (Emph s) = map Emph $ splitStyled s
+    splitStyled (Fg c s) = map (Fg c) $ splitStyled s
     fitWords :: [Styled] -> Int -> [Styled] -> [StyledLine]
-    -- fitWords curLine curLen (w:ws) = [[fromString $ show (w:ws)]]
     fitWords curLine curLen (w:ws)
       -- handle newline characters
       | unstyled [w] == "\n" = curLine : fitWords [] 0 ws
       -- a new line
-      | curLen == 0 = fitWords [w] (length $ unstyled [w]) ws
+      | curLen == 0 = if length (unstyled [w]) <= maxLen
+                      then fitWords [w] (length $ unstyled [w]) ws
+                      else map pure (splitStyled w) ++ fitWords [] 0 ws
       -- add a word to a line
       | otherwise = let wLen = length (unstyled [w])
                         spaceAhead = case ws of
