@@ -25,7 +25,7 @@ your default emacs browser:
 
 - [q]uit, [b]ack, [f]orward, [h]elp, [r]eload, [re]load config
 - <number>: follow a link (or open the referenced file)
-- <number>?: show link/image URI
+- ?<number>: show link/image URI
 - ?: show current URI
 - RET (empty): show the next 2/3 of a page, if pagination is enabled
 - <URI>: follow an URI, possibly relative to the current one

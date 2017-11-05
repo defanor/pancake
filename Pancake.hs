@@ -34,6 +34,7 @@ import System.IO.Error
 
 import Pancake.Common
 import Pancake.Configuration
+import Pancake.Command
 import Pancake.Reading
 import Pancake.Rendering
 import Pancake.Printing
@@ -134,21 +135,6 @@ goTo u' = do
         let (prev, _) = history s
         in s { history = (take (historyDepth $ conf s) $ (u, doc) : prev, []) }
 
--- | Interactive user command.
-data Command = Quit
-             | Follow Int
-             | More
-             | GoTo URI
-             | Reload
-             | Back
-             | Forward
-             | Help
-             | Show Int
-             | ShowCurrent
-             | Shortcut String String
-             | ReloadConfig
-             deriving (Show, Eq)
-
 -- | Evaluates user commands.
 command :: MonadIO m => Command -> StateT LoopState m ()
 command (GoTo u@(URI _ _ _ _ ('#':xs))) = do
@@ -243,25 +229,7 @@ eventLoop = do
                 (putErrLn ("Unexpected error: " ++ show e))
                 >> pure Quit
   st <- get
-  c <- flip (either onErr) cmd' $ \cmd -> pure $
-    case cmd of
-      "q" -> Quit
-      "b" -> Back
-      "f" -> Forward
-      "r" -> Reload
-      "re" -> ReloadConfig
-      "h" -> Help
-      "?" -> ShowCurrent
-      _ -> case reads cmd of
-        [(n, "")] -> Follow n
-        [(n, "?")] -> Show n
-        _ -> case words cmd of
-          [] -> More
-          (s:q) -> case M.lookup s (shortcuts (conf st)) of
-            Just u -> Shortcut u $ unwords q
-            Nothing -> case parseURIReference cmd of
-                         Just uri -> GoTo uri
-                         Nothing -> Help
+  c <- either onErr (pure . parseCommand (conf st)) cmd'
   command c
   when (c /= Quit) eventLoop
 
