@@ -72,6 +72,7 @@ instance Default Config where
       [ ("ddg", "https://duckduckgo.com/lite/?q=")
       , ("wp", "https://en.m.wikipedia.org/wiki/Special:Search?search=")
       , ("wt", "https://en.m.wiktionary.org/w/index.php?search=")
+      , ("g", "https://m.gutenberg.org/ebooks/search.mobile/?query=")
       , ("gp", "gopher://gopherpedia.com:70/7/lookup?")
       , ("vs", "gopher://gopher.floodgap.com/7/v2/vs?")]
     , paginate = True

@@ -56,6 +56,7 @@ defaultCommand: ! 'curl -4 -L "${URI}" -w "
 
   "'
 shortcuts:
+  g: https://m.gutenberg.org/ebooks/search.mobile/?query=
   ddg: https://duckduckgo.com/lite/?q=
   wt: https://en.m.wiktionary.org/w/index.php?search=
   wp: https://en.m.wikipedia.org/wiki/Special:Search?search=
