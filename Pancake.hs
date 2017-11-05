@@ -52,8 +52,8 @@ data LoopState = LS { history :: Sliding (URI, P.Pandoc)
                     } deriving (Show)
 
 -- | Renders a parsed document.
-printDoc :: MonadIO m => P.Pandoc -> StateT LoopState m ()
-printDoc doc = do
+printDoc :: MonadIO m => URI -> P.Pandoc -> StateT LoopState m ()
+printDoc uri doc = do
   term <- liftIO setupTermFromEnv
   st <- get
   let cols = maybe 80 id $ getCapability term termColumns
@@ -61,7 +61,7 @@ printDoc doc = do
       textLines = rLines l
   modify (\s -> s { rendered = l })
   if embedded st
-    then showSexps l
+    then showSexps uri l
     else do
     let rows = maybe 25 id (getCapability term termLines) - 1
     showLines $ if paginate (conf st)
@@ -137,14 +137,14 @@ loadDocument sType rawURI = do
 -- | Visits an URI, updates history accordingly.
 goTo :: MonadIO m => Maybe String -> URI -> StateT LoopState m ()
 goTo t u' = do
-  (u, d) <- loadDocument t u'
+  (uri, d) <- loadDocument t u'
   case d of
     Nothing -> pure ()
     Just doc -> do
-      printDoc doc
+      printDoc uri doc
       modify $ \s ->
         let (prev, _) = history s
-        in s { history = (take (historyDepth $ conf s) $ (u, doc) : prev, []) }
+        in s {history = (take (historyDepth $ conf s) $ (uri, doc) : prev, [])}
 
 -- | Evaluates user commands.
 command :: MonadIO m => Command -> StateT LoopState m ()
@@ -175,16 +175,16 @@ command (Follow i) = do
 command Back = do
   st <- get
   case history st of
-    (cur:p@(_, d):prev, next) -> do
-      printDoc d
+    (cur:p@(uri, d):prev, next) -> do
+      printDoc uri d
       modify $ \s ->
         s { history = (p:prev, take (historyDepth $ conf s) $ cur : next) }
     _ -> liftIO $ putErrLn "There's nothing back there"
 command Forward = do
   st <- get
   case history st of
-    (prev, n@(_, d):next) -> do
-      printDoc d
+    (prev, n@(uri, d):next) -> do
+      printDoc uri d
       modify $ \s ->
         s { history = (take (historyDepth $ conf s) $ n : prev, next) }
     _ -> liftIO $ putErrLn "Nowhere to go"
@@ -200,11 +200,11 @@ command Reload = do
   st <- get
   case history st of
     ((u, _):prev, next) -> do
-      (_, d) <- loadDocument Nothing u
+      (uri, d) <- loadDocument Nothing u
       case d of
         Nothing -> pure ()
         Just doc -> do
-          printDoc doc
+          printDoc uri doc
           modify $ \s -> s { history = ( (u, doc):prev, next ) }
     _ -> putErrLn "There's nothing to reload"
 command Help = do

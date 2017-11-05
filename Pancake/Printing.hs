@@ -51,8 +51,8 @@ putSexpLn s = liftIO $ do
   hFlush stdout
 
 -- | Prints rendered lines as s-expressions.
-showSexps :: MonadIO m => [RendererOutput] -> m ()
-showSexps ro =
+showSexps :: MonadIO m => URI -> [RendererOutput] -> m ()
+showSexps uri ro =
   -- would be nicer to use some library for this, but they tend to be
   -- abandoned, and the task is simple enough to do it here
   putSexpLn [ "render"
@@ -62,7 +62,8 @@ showSexps ro =
             , list $ "identifiers"
               : map (\(i, l) -> list [encodeStr i, show l]) (rIdentifiers ro)
             , list $ "links"
-              : map (\uri -> encodeStr $ uriToString id uri "") (rLinks ro)]
+              : map (\u -> encodeStr $ uriToString id u "") (rLinks ro)
+            , list ["uri", ".", encodeStr $ uriToString id uri ""]]
   where
     encodeStr s = concat ["\"", concatMap escape s, "\""]
     escape '\\' = "\\\\"

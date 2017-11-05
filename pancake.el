@@ -113,6 +113,10 @@
   "Pancake browser process.")
 (make-variable-buffer-local 'pancake-process)
 
+(defvar pancake-current-uri nil
+  "Current URI.")
+(make-variable-buffer-local 'pancake-current-uri)
+
 ;;###autoload
 (defun pancake ()
   "Run the pancake browser."
@@ -201,6 +205,7 @@
                  (delete-region (point-min) (point-max))
                  ;; todo: maybe store identifiers and links for
                  ;; further manipulation
+                 (setq pancake-current-uri (alist-get 'uri alist))
                  (dolist (line (alist-get 'lines alist))
                    (insert (pancake-print-line line))
                    (newline))
@@ -271,6 +276,13 @@
   (interactive)
   (pancake-process-send "r"))
 
+(defun pancake-display-current-uri ()
+  "Display current URI and put it into the kill ring."
+  (interactive)
+  (when pancake-current-uri
+    (message "%s" pancake-current-uri)
+    (kill-new pancake-current-uri)))
+
 (defun pancake-input (string)
   "Pancake input handler: opens minibuffer for input.
 Sets the initial contents to STRING, reads the rest, and passes
@@ -290,6 +302,7 @@ it to `pancake-process' as input."
     (define-key map (kbd "C-y") 'pancake-yank)
     (define-key map (kbd "<mouse-2>") 'pancake-yank-primary)
     (define-key map (kbd "C-c C-c") 'pancake-interrupt)
+    (define-key map (kbd "C-c C-u") 'pancake-display-current-uri)
     (define-key map (kbd "B") 'pancake-go-backward)
     (define-key map (kbd "F") 'pancake-go-forward)
     (define-key map (kbd "Q") 'pancake-quit)
