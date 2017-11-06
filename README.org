@@ -37,7 +37,10 @@ your default emacs browser:
 pancake-mode provides additional aliases, see built-in emacs
 documentation (~C-h m~) for those.
 
-* Sample configuration
+* Configuration
+
+Default configuration will be written into XDG configuration
+directory, and would look approximately like this:
 
 #+BEGIN_SRC yaml
 externalViewers:

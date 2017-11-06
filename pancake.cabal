@@ -1,5 +1,5 @@
 name:                pancake
-version:             0.1.2
+version:             0.1.3
 synopsis:            A CLI web/gopher/file browser
 description:         Pancake is a CLI web/gopher/file browser inspired
                      by Line Mode Browser. It relies on pandoc for
