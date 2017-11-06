@@ -123,7 +123,7 @@ loadDocument sType rawURI = do
             handle
               (\(e :: SomeException) ->
                  putErrLn (concat ["Failed to open `", tmpPath, "` with `"
-                                  , cmd, "`: ", show e])) $ do
+                                  , ev, "`: ", show e])) $ do
               createDirectoryIfMissing True dir
               BS.writeFile tmpPath rawDoc
               curEnv <- getEnvironment
