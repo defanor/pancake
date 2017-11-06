@@ -16,7 +16,8 @@ import Control.Monad.State
 import System.IO
 import System.Console.Terminfo
 import Network.URI
-import Data.List
+import Data.Maybe
+
 import Pancake.Rendering
 
 
@@ -26,24 +27,24 @@ propertize _ (Plain s) = termText s
 propertize t (Fg clr s) = maybe id (\f -> f clr)
   (getCapability t withForegroundColor) $ propertize t s
 propertize t (Bold s) =
-  maybe id id (getCapability t withBold) $ propertize t s
+  fromMaybe id (getCapability t withBold) $ propertize t s
 propertize t (Emph s) =
-  maybe id id (getCapability t withStandout) $ propertize t s
+  fromMaybe id (getCapability t withStandout) $ propertize t s
 propertize t (Underline s) =
-  maybe id id (getCapability t withUnderline) $ propertize t s
+  fromMaybe id (getCapability t withUnderline) $ propertize t s
 propertize t (Denote _ s) = propertize t s
 
 -- | Prints rendered lines.
 showLines :: MonadIO m => [StyledLine] -> m ()
 showLines ls = liftIO $ do
   term <- setupTermFromEnv
-  let nl = maybe (termText "\n") id $ getCapability term newline
+  let nl = fromMaybe (termText "\n") $ getCapability term newline
   runTermOutput term . mconcat $
     map (\l -> mconcat (map (propertize term) l) <#> nl) ls
 
 -- | Shows a list of strings as an s-expression
 list :: [String] -> String
-list l = "(" ++ intercalate " " l ++ ")"
+list l = "(" ++ unwords l ++ ")"
 
 -- | Prints a list of strings as an s-expression.
 putSexpLn :: MonadIO m => [String] -> m ()
@@ -58,7 +59,7 @@ showSexps uri ro =
   -- abandoned, and the task is simple enough to do it here
   putSexpLn [ "render"
             , list $ "lines" :
-              map (list . pure . concat . intersperse " " . map showSexp . mergeStyled)
+              map (list . pure . unwords . map showSexp . mergeStyled)
               (rLines ro)
             , list $ "identifiers"
               : map (\(i, l) -> list [encodeStr i, show l]) (rIdentifiers ro)

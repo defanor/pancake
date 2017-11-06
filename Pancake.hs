@@ -56,14 +56,14 @@ printDoc :: MonadIO m => URI -> P.Pandoc -> StateT LoopState m ()
 printDoc uri doc = do
   term <- liftIO setupTermFromEnv
   st <- get
-  let cols = maybe 80 id $ getCapability term termColumns
+  let cols = fromMaybe 80 $ getCapability term termColumns
       l = renderDoc cols doc
       textLines = rLines l
   modify (\s -> s { rendered = l })
   if embedded st
     then showSexps uri l
     else do
-    let rows = maybe 25 id (getCapability term termLines) - 1
+    let rows = fromMaybe 25 (getCapability term termLines) - 1
     showLines $ if paginate (conf st)
                 then take rows textLines
                 else textLines
@@ -88,7 +88,7 @@ loadDocument sType rawURI = do
   let ddg = isPrefixOf "/l/?kh=-1&uddg=" $ uriToString id rawURI ""
       adjustedURI = case (ddg, uriIsAbsolute rawURI, history st) of
         -- fix DDG links (that's rather hacky, todo: improve)
-        (True, _, _) -> maybe rawURI id $
+        (True, _, _) -> fromMaybe rawURI $
           parseAbsoluteURI (unEscapeString $ drop 12 (uriQuery rawURI))
         -- handle relative URIs
         (_, False, ((cur, _):_, _)) -> relativeTo rawURI cur
@@ -96,14 +96,14 @@ loadDocument sType rawURI = do
       uScheme = case uriScheme adjustedURI of
         [] -> "unknown"
         s -> init s
-      cmd = maybe (defaultCommand $ conf st) id $
+      cmd = fromMaybe (defaultCommand $ conf st) $
         M.lookup uScheme (commands $ conf st)
   liftIO $ do
     docData <- retrieve cmd adjustedURI
     case docData of
       Nothing -> pure (adjustedURI, mzero)
       Just (rawDoc, mdURI, mdType) -> do
-        let effectiveURI = maybe adjustedURI id mdURI
+        let effectiveURI = fromMaybe adjustedURI mdURI
             fType = sType <|> mdType
             ext = case (fType, takeExtension $ uriPath effectiveURI) of
               (Just x, _) -> x
@@ -119,7 +119,7 @@ loadDocument sType rawURI = do
               Right r -> pure (effectiveURI, pure r)
           Just ev -> do
             dir <- getXdgDirectory XdgCache "pancake"
-            let tmpPath = dir </> (takeFileName $ uriPath effectiveURI)
+            let tmpPath = dir </> takeFileName (uriPath effectiveURI)
             handle
               (\(e :: SomeException) ->
                  putErrLn (concat ["Failed to open `", tmpPath, "` with `"
@@ -131,7 +131,7 @@ loadDocument sType rawURI = do
                 ((shell ev) { env = Just (("FILE", tmpPath) : curEnv) }) $
                 \_ _ _ p -> waitForProcess p
               when (ec /= ExitSuccess) $
-                putErrLn $ concat ["An error occured. Exit code: ", show ec]
+                putErrLn $ "An error occured. Exit code: " ++ show ec
             pure (effectiveURI, mzero)
 
 -- | Visits an URI, updates history accordingly.
@@ -159,7 +159,7 @@ command (GoTo t u@(URI _ _ _ _ ('#':xs))) = do
     (Nothing, _) -> putErrLn $ "Unknown identifier: " ++ xs
     (Just x, False) -> do
       term <- liftIO setupTermFromEnv
-      let lineCount = maybe 25 id (getCapability term termLines)
+      let lineCount = fromMaybe 25 (getCapability term termLines)
       when (x + lineCount - 2 > position st) $ do
         -- scroll to the given position without skipping anything
         showLines $ take (x - position st + lineCount - 2) $
@@ -191,7 +191,7 @@ command Forward = do
 command More = do
   st <- get
   term <- liftIO setupTermFromEnv
-  let lineCount' = maybe 25 id (getCapability term termLines)
+  let lineCount' = fromMaybe 25 (getCapability term termLines)
       lineCount = lineCount' - div lineCount' 3
   showLines $ take lineCount $ drop (position st) (rLines $ rendered st)
   modify (\s -> s { position = position st + lineCount })
@@ -210,7 +210,7 @@ command Reload = do
 command Help = do
   st <- get
   liftIO $ do
-    putErrLn $ intercalate "\n" $
+    putErrLn $ intercalate "\n"
       [ "[q]uit, [b]ack, [f]orward, [h]elp, [r]eload, [re]load config"
       , "type a number to follow a link, \"?<number>\" to print its URI"
       , "type an URI (absolute or relative) to open it"

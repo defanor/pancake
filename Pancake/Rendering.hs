@@ -72,19 +72,19 @@ data RendererOutput = RLink URI
 -- | Extracts links.
 rLinks :: [RendererOutput] -> [URI]
 rLinks [] = []
-rLinks ((RLink l):xs) = l : rLinks xs
+rLinks (RLink l:xs) = l : rLinks xs
 rLinks (_:xs) = rLinks xs
 
 -- | Extracts text lines.
 rLines :: [RendererOutput] -> [StyledLine]
 rLines [] = []
-rLines ((RLine l):xs) = l : rLines xs
+rLines (RLine l:xs) = l : rLines xs
 rLines (_:xs) = rLines xs
 
 -- | Extracts identifiers.
 rIdentifiers :: [RendererOutput] -> [(String, Int)]
 rIdentifiers [] = []
-rIdentifiers ((RIdentifier s i):xs) = (s, i) : rIdentifiers xs
+rIdentifiers (RIdentifier s i:xs) = (s, i) : rIdentifiers xs
 rIdentifiers (_:xs) = rIdentifiers xs
 
 -- | Used to render 'Pandoc' docs by writing text lines and collected
@@ -102,7 +102,7 @@ runRenderer :: Int
             -- ^ A renderer.
             -> [RendererOutput]
             -- ^ Collected links and text lines.
-runRenderer cols ls ln r = snd $ fst $ runState (runWriterT r)
+runRenderer cols ls ln r = snd $ evalState (runWriterT r)
   (RS 0 ls ln Nothing cols)
 
 -- | Stores a link, increasing the counter
@@ -159,7 +159,7 @@ indented slines = do
       indent = il + prefixLen
       fittedLines = fitLines (columns st - indent) slines
       pad = (fromString (replicate indent ' ') :)
-      padFirst = (\x -> fromString (replicate il ' ') : prefix : x)
+      padFirst x = fromString (replicate il ' ') : prefix : x
   -- The following blocks of the same list item should be indented
   -- with the same level. This should be reset to the original value
   -- where the listing type is getting set.
@@ -217,7 +217,7 @@ fitLines maxLen inlineBits = concatMap (map reverse . fitWords [] 0) inlineBits
         in if curLen + wLen <= maxLen
            then fitWords (w:curLine) (curLen + wLen) $
                 -- if there's an unnecessary space ahead, skip it
-                if (curLen + wLen + 1 > maxLen && spaceAhead)
+                if curLen + wLen + 1 > maxLen && spaceAhead
                 then tail ws
                 else ws
            else curLine : fitWords [] 0 (w:ws)
@@ -333,7 +333,7 @@ renderBlock (P.Header level attr i) = do
   strings <- readInlines i
   storeLines [[""]]
   indented $ map (map (Fg Green) . ([fromString (replicate level '#'), " "] ++)
-                  . (map (Bold . Underline))) strings
+                  . map (Bold . Underline)) strings
   storeLines [[""]]
 renderBlock P.HorizontalRule = do
   st <- get
@@ -349,8 +349,8 @@ renderBlock (P.Table caption _ widths headers rows) = do
         w -> minimum w /= maximum w
   ws <- if widthsAreSet then pure widths else do
     lens <- map sum . transpose <$>
-      mapM (mapM (\c -> (length . unstyled . concat . rLines)
-                   <$> renderCell 80 c)) rows
+      mapM (mapM (fmap (length . unstyled . concat . rLines) . renderCell 80))
+      rows
     pure $ map (\l -> fromIntegral l / fromIntegral (sum lens)) lens
   mapM_ (\r -> renderBlock P.HorizontalRule >> tableRow ws r) (headers : rows)
   renderBlock P.HorizontalRule
@@ -364,7 +364,7 @@ renderBlock (P.Table caption _ widths headers rows) = do
     tableCell w blocks = do
       l <- renderCell w blocks
       mapM_ storeLink $ rLinks l
-      tell $ map (\(s, i) -> RIdentifier s i) $ rIdentifiers l
+      tell $ map (uncurry RIdentifier) $ rIdentifiers l
       pure $ map
         (\x -> x ++ [fromString (replicate (w - length (unstyled x)) ' ')])
         $ rLines l

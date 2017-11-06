@@ -30,6 +30,7 @@ import System.Environment
 import GHC.IO.Handle
 import Text.Parsec hiding ((<|>))
 import Text.Parsec.ByteString
+import Data.Maybe
 
 import Text.Pandoc.Readers.Plain
 import Text.Pandoc.Readers.Gopher
@@ -57,8 +58,7 @@ pMeta = do
 
 -- | Document body + metadata parser.
 pWithMeta :: Parser (BS.ByteString, (Maybe URI, Maybe String))
-pWithMeta = (,)
-            <$> BS.pack <$> manyTill anyToken (try $ lookAhead pMeta)
+pWithMeta = (,) . BS.pack <$> manyTill anyToken (try $ lookAhead pMeta)
             <*> pMeta
 
 -- | Retrieves a document. Prints an error message and returns an
@@ -96,9 +96,9 @@ retrieve cmd uri = do
         hSetBinaryMode stdout' True
         out <- BS.hGetContents stdout'
         ec <- waitForProcess ph
-        if (ec /= ExitSuccess)
+        if ec /= ExitSuccess
           then do
-          putErrLn $ concat ["An error occured. Exit code: ", show ec]
+          putErrLn $ "An error occured. Exit code: " ++ show ec
           case stderr of
             Nothing -> pure ()
             Just stderr' -> do
@@ -140,7 +140,7 @@ readDoc out dt uri = do
                  -- unknown or unrecognized item type
                  _ -> byExtension ext <|> gopher
                (_, ext) -> byExtension ext
-      cols = maybe 80 id $ getCapability term termColumns
+      cols = fromMaybe 80 $ getCapability term termColumns
       opts = def { P.readerColumns = cols }
   case reader of
     (P.TextReader f, _) -> case decodeUtf8' out of
