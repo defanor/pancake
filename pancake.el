@@ -210,16 +210,15 @@
             (let ((output (read raw-line)))
               (pcase output
                 (`(render . ,alist)
-                 (read-only-mode -1)
-                 (delete-region (point-min) (point-max))
                  ;; todo: maybe store identifiers and links for
                  ;; further manipulation
-                 (setq pancake-current-uri (alist-get 'uri alist))
-                 (dolist (line (alist-get 'lines alist))
-                   (pancake-print-line line)
-                   (newline))
-                 (read-only-mode 1)
-                 (goto-char (point-min)))
+                 (let ((inhibit-read-only t))
+                   (delete-region (point-min) (point-max))
+                   (setq pancake-current-uri (alist-get 'uri alist))
+                   (dolist (line (alist-get 'lines alist))
+                     (pancake-print-line line)
+                     (newline))
+                   (goto-char (point-min))))
                 (`(goto ,line) (goto-line line))))))
         (setq pancake-process-output "")))))
 
