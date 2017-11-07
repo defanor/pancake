@@ -93,6 +93,11 @@
   "Foreground face for white color."
   :group 'pancake)
 
+(defface pancake-strike-through
+  '((t :strike-through t))
+  "A strike-through face."
+  :group 'pancake)
+
 (defcustom pancake-command '("pancake" "--embedded")
   "A command that runs pancake, along with its arguments"
   :group 'pancake)
@@ -178,9 +183,19 @@
          (pancake-print-line rest)
          (add-face-text-property
           start (point) (pancake-translate-color color 'foreground) t))
+        (`(style strikethrough . ,rest)
+         (pancake-print-line rest)
+         (add-face-text-property start (point) 'pancake-strike-through t))
         (`(style ,face . ,rest)
          (pancake-print-line rest)
          (add-face-text-property start (point) face t))
+        (`(subscript . ,rest)
+         (pancake-print-line rest)
+         (add-text-properties start (point) '(display (height 0.75))))
+        (`(superscript . ,rest)
+         (pancake-print-line rest)
+         (add-text-properties start (point) '(display ((raise 0.25)
+                                                       (height 0.75)))))
         (`(denotation (math . ,formula) . ,rest)
          (pancake-print-line rest))
         (`(denotation (link . ,uri) . ,rest)

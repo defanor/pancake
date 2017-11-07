@@ -30,6 +30,12 @@ propertize t (Bold s) =
   fromMaybe id (getCapability t withBold) $ propertize t s
 propertize t (Emph s) =
   fromMaybe id (getCapability t withStandout) $ propertize t s
+propertize t (Strikethrough s) =
+  mconcat [termText "-", propertize t s, termText "-"]
+propertize t (Subscript s) =
+  mconcat [termText "_{", propertize t s, termText "}"]
+propertize t (Superscript s) =
+  mconcat [termText "^{", propertize t s, termText "}"]
 propertize t (Underline s) =
   fromMaybe id (getCapability t withUnderline) $ propertize t s
 propertize t (Denote _ s) = propertize t s
@@ -78,6 +84,9 @@ showSexps uri ro =
     showSexp (Bold s) = list ["style", "bold", showSexp s]
     showSexp (Underline s) = list ["style", "underline", showSexp s]
     showSexp (Emph s) = list ["style", "italic", showSexp s]
+    showSexp (Strikethrough s) = list ["style", "strikethrough", showSexp s]
+    showSexp (Subscript s) = list ["subscript", showSexp s]
+    showSexp (Superscript s) = list ["superscript", showSexp s]
     showSexp (Denote d s) = list [ "denotation"
                                  , showDenotation d
                                  , showSexp s]

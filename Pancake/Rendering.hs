@@ -44,6 +44,9 @@ data Styled = Plain String
             | Underline Styled
             | Bold Styled
             | Emph Styled
+            | Strikethrough Styled
+            | Subscript Styled
+            | Superscript Styled
             | Fg Color Styled
             | Denote Denotation Styled
             deriving (Show, Eq)
@@ -178,6 +181,9 @@ unstyled = concatMap unstyled'
     unstyled' (Underline s) = unstyled' s
     unstyled' (Bold s) = unstyled' s
     unstyled' (Emph s) = unstyled' s
+    unstyled' (Strikethrough s) = unstyled' s
+    unstyled' (Subscript s) = unstyled' s
+    unstyled' (Superscript s) = unstyled' s
     unstyled' (Fg _ s) = unstyled' s
     unstyled' (Denote _ s) = unstyled' s
 
@@ -199,6 +205,9 @@ fitLines maxLen inlineBits = concatMap (map reverse . fitWords [] 0) inlineBits
     splitStyled (Underline s) = map Underline $ splitStyled s
     splitStyled (Bold s) = map Bold $ splitStyled s
     splitStyled (Emph s) = map Emph $ splitStyled s
+    splitStyled (Strikethrough s) = map Strikethrough $ splitStyled s
+    splitStyled (Subscript s) = map Subscript $ splitStyled s
+    splitStyled (Superscript s) = map Superscript $ splitStyled s
     splitStyled (Fg c s) = map (Fg c) $ splitStyled s
     splitStyled (Denote d s) = map (Denote d) $ splitStyled s
     fitWords :: [Styled] -> Int -> [Styled] -> [StyledLine]
@@ -248,9 +257,9 @@ readInline (P.Str s)
   | otherwise = pure [fromString s]
 readInline (P.Emph s) = concatMap (map Emph) <$> mapM readInline s
 readInline (P.Strong s) = concatMap (map Bold) <$> mapM readInline s
-readInline (P.Strikeout s) = wrappedInlines "-" "-" s
-readInline (P.Superscript s) = wrappedInlines "^{" "}" s
-readInline (P.Subscript s) = wrappedInlines "_{" "}" s
+readInline (P.Strikeout s) = concatMap (map Strikethrough) <$> mapM readInline s
+readInline (P.Superscript s) = concatMap (map Superscript) <$> mapM readInline s
+readInline (P.Subscript s) = concatMap (map Subscript) <$> mapM readInline s
 readInline (P.SmallCaps s) = wrappedInlines "\\sc{" "}" s
 readInline (P.Quoted P.SingleQuote s) = wrappedInlines "‘" "’" s
 readInline (P.Quoted P.DoubleQuote s) = wrappedInlines "“" "”" s
