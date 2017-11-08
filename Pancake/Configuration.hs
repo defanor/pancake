@@ -67,12 +67,13 @@ instance Default Config where
       ["hs", "cabal", "c", "h", "el", "scm", "idr"]
       ++ map (flip (,) "xdg-open \"${FILE}\"")
       [ "svg", "png", "jpg", "jpeg", "gif", "pdf", "ogg", "ogv"
-      , "webm", "mp3", "mp4", "mkv", "mpeg", "wav" ]
+      , "webm", "mp3", "mp4", "mkv", "mpeg", "wav", "xspf", "m3u" ]
     , shortcuts = M.fromList
       [ ("ddg", "https://duckduckgo.com/lite/?q=")
       , ("wp", "https://en.m.wikipedia.org/wiki/Special:Search?search=")
       , ("wt", "https://en.m.wiktionary.org/w/index.php?search=")
       , ("g", "https://m.gutenberg.org/ebooks/search.mobile/?query=")
+      , ("xiph", "http://dir.xiph.org/search?search=")
       , ("gp", "gopher://gopherpedia.com:70/7/lookup?")
       , ("vs", "gopher://gopher.floodgap.com/7/v2/vs?")]
     , paginate = True
