@@ -346,13 +346,19 @@
     (when line
       (goto-line line))))
 
+(defun pancake-prompt (&optional string)
+  "Prompts for input, passes it to `pancake-process'. Similar to
+`pancake-input', but runs immediately."
+  (interactive)
+  (pancake-process-send (read-from-minibuffer "pancake> " string)))
+
 (defun pancake-input (string)
   "Pancake input handler: opens minibuffer for input.
 Sets the initial contents to STRING, reads the rest, and passes
 it to `pancake-process' as input."
   (lambda ()
     (interactive)
-    (pancake-process-send (read-from-minibuffer "" string))))
+    (pancake-prompt string)))
 
 (defvar pancake-mode-map
   (let ((map (make-sparse-keymap))
@@ -368,6 +374,7 @@ it to `pancake-process' as input."
     (define-key map (kbd "<mouse-9>") 'pancake-go-forward)
     (define-key map (kbd "TAB") 'pancake-next-button)
     (define-key map (kbd "<backtab>") 'pancake-previous-button)
+    (define-key map (kbd "RET") 'pancake-prompt)
     (define-key map (kbd "C-c C-c") 'pancake-interrupt)
     (define-key map (kbd "C-c C-u") 'pancake-display-current-uri)
     (define-key map (kbd "C-M-e") 'pancake-next-heading)

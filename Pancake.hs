@@ -190,12 +190,12 @@ command Forward = do
     _ -> liftIO $ putErrLn "Nowhere to go"
 command More = do
   st <- get
-  term <- liftIO setupTermFromEnv
-  let lineCount' = fromMaybe 25 (getCapability term termLines)
-      lineCount = lineCount' - div lineCount' 3
-  showLines $ take lineCount $ drop (position st) (rLines $ rendered st)
-  modify (\s -> s { position = position st + lineCount })
-  pure ()
+  unless (embedded st) $ do
+    term <- liftIO setupTermFromEnv
+    let lineCount' = fromMaybe 25 (getCapability term termLines)
+        lineCount = lineCount' - div lineCount' 3
+    showLines $ take lineCount $ drop (position st) (rLines $ rendered st)
+    modify (\s -> s { position = position st + lineCount })
 command Reload = do
   st <- get
   case history st of
