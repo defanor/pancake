@@ -335,7 +335,7 @@ renderBlock (P.BulletList bs) = do
   modify $ \s -> s { listing = Nothing }
 renderBlock (P.DefinitionList dl) =
   let renderDefinition (term, definition) = do
-        indented =<< readInlines term
+        indented =<< map (map (Fg Yellow)) <$> readInlines term
         mapM_ renderBlocks definition
   in mapM_ renderDefinition dl
 renderBlock (P.Header level attr i) = do
