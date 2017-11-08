@@ -267,7 +267,7 @@ readInline (P.Quoted P.DoubleQuote s) = wrappedInlines "“" "”" s
 readInline (P.Cite _ s) = concat <$> mapM readInline s
 readInline (P.Code attr s) = do
   storeAttr attr
-  pure . map fromString $ intersperse "\n" $ lines s
+  pure . map (Fg Green . fromString) $ intersperse "\n" $ lines s
 readInline P.Space = pure [" "]
 readInline P.SoftBreak = pure [" "]
 readInline P.LineBreak = pure ["\n"]
@@ -321,7 +321,7 @@ renderBlock (P.LineBlock i) =
   indented =<< concat <$> mapM (mapM readInline) i
 renderBlock (P.CodeBlock attr s) = do
   storeAttr attr
-  indented $ map (pure . fromString) $ lines s
+  indented $ map (pure . Fg Green . fromString) $ lines s
 renderBlock (P.RawBlock _ s) =
   indented $ map (pure . fromString) $ lines s
 renderBlock (P.BlockQuote bs) = renderBlocks bs
