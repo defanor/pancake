@@ -316,7 +316,7 @@ readInlines i = pure . concat <$> mapM readInline i
 -- | Renders a block element.
 renderBlock :: P.Block -> Renderer ()
 renderBlock (P.Plain i) = indented =<< readInlines i
-renderBlock (P.Para i) = (indented =<< readInlines i) >> storeLines [[""]]
+renderBlock (P.Para i) = indented =<< readInlines i
 renderBlock (P.LineBlock i) =
   indented =<< concat <$> mapM (mapM readInline) i
 renderBlock (P.CodeBlock attr s) = do
@@ -393,9 +393,13 @@ renderBlock (P.Div attr b) = do
   renderBlocks b
 renderBlock P.Null = pure ()
 
+-- | Renders a block element followed by an empy line.
+renderBlockLn :: P.Block -> Renderer ()
+renderBlockLn b = renderBlock b >> storeLines [[]]
+
 -- | Renders multiple block elements.
 renderBlocks :: [P.Block] -> Renderer ()
-renderBlocks b = withIndent $ mapM_ renderBlock b
+renderBlocks b = withIndent $ mapM_ renderBlockLn b
 
 -- | Renders a document.
 renderDoc :: Int
@@ -405,4 +409,4 @@ renderDoc :: Int
           -> [RendererOutput]
           -- ^ Rendered document.
 renderDoc cols (P.Pandoc _ blocks) =
-  runRenderer cols 0 1 $ mapM_ renderBlock blocks
+  runRenderer cols 0 1 $ mapM_ renderBlockLn blocks
