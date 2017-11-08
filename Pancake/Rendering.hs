@@ -340,9 +340,8 @@ renderBlock (P.DefinitionList dl) =
   in mapM_ renderDefinition dl
 renderBlock (P.Header level attr i) = do
   storeAttr attr
-  indented =<< map (map (Denote (Heading level) . Fg Green)
-                    . ([fromString (replicate level '#'), " "] ++)
-                    . map (Bold . Underline))
+  indented =<< map (map (Denote (Heading level) . Bold . Fg Green)
+                    . ([fromString (replicate level '#'), " "] ++))
     <$> readInlines i
 renderBlock P.HorizontalRule = do
   st <- get
