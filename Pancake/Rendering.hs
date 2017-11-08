@@ -37,6 +37,7 @@ data Listing = Bulleted
 
 data Denotation = Link URI
                 | Math String
+                | Heading Int
                 deriving (Show, Eq)
 
 -- | A styled string.
@@ -339,11 +340,10 @@ renderBlock (P.DefinitionList dl) =
   in mapM_ renderDefinition dl
 renderBlock (P.Header level attr i) = do
   storeAttr attr
-  strings <- readInlines i
-  storeLines [[""]]
-  indented $ map (map (Fg Green) . ([fromString (replicate level '#'), " "] ++)
-                  . map (Bold . Underline)) strings
-  storeLines [[""]]
+  indented =<< map (map (Denote (Heading level) . Fg Green)
+                    . ([fromString (replicate level '#'), " "] ++)
+                    . map (Bold . Underline))
+    <$> readInlines i
 renderBlock P.HorizontalRule = do
   st <- get
   indented [[Fg Black $

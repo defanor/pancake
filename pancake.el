@@ -106,6 +106,10 @@
   "A list of pancake browser buffers, used to find a buffer to
   use by `pancake-browse-url'.")
 
+(defvar pancake-headings '()
+  "A list of headings with their levels.")
+(make-variable-buffer-local 'pancake-headings)
+
 (defvar pancake-process-output ""
   "Pancake process's stdout collector.")
 (make-variable-buffer-local 'pancake-process-output)
@@ -203,6 +207,11 @@
          (make-text-button start (point)
                            'uri uri
                            'action #'pancake-button-action))
+        (`(denotation (heading . ,level) . ,rest)
+         (pancake-print-line rest)
+         (add-to-list 'pancake-headings (cons (line-number-at-pos) level))
+         (add-text-properties start (point)
+                              `(display (height ,(1+ (/ 0.5 level))))))
         (_ (format "Unexpected element: %S" element))))))
 
 (defun pancake-print-line (line)
@@ -229,7 +238,8 @@
                  ;; further manipulation
                  (let ((inhibit-read-only t))
                    (delete-region (point-min) (point-max))
-                   (setq pancake-current-uri (alist-get 'uri alist))
+                   (setq pancake-current-uri (alist-get 'uri alist)
+                         pancake-headings '())
                    (dolist (line (alist-get 'lines alist))
                      (pancake-print-line line)
                      (newline))
@@ -320,6 +330,22 @@
     (when prev
       (goto-char prev))))
 
+(defun pancake-previous-heading ()
+  "Moves cursor to the previous heading."
+  (interactive)
+  (let ((line (seq-find (lambda (x) (< x (line-number-at-pos)))
+                        (mapcar 'car pancake-headings))))
+    (when line
+      (goto-line line))))
+
+(defun pancake-next-heading ()
+  "Moves cursor to the next heading."
+  (interactive)
+  (let ((line (seq-find (lambda (x) (> x (line-number-at-pos)))
+                        (reverse (mapcar 'car pancake-headings)))))
+    (when line
+      (goto-line line))))
+
 (defun pancake-input (string)
   "Pancake input handler: opens minibuffer for input.
 Sets the initial contents to STRING, reads the rest, and passes
@@ -344,6 +370,8 @@ it to `pancake-process' as input."
     (define-key map (kbd "<backtab>") 'pancake-previous-button)
     (define-key map (kbd "C-c C-c") 'pancake-interrupt)
     (define-key map (kbd "C-c C-u") 'pancake-display-current-uri)
+    (define-key map (kbd "C-M-e") 'pancake-next-heading)
+    (define-key map (kbd "C-M-a") 'pancake-previous-heading)
     (define-key map (kbd "B") 'pancake-go-backward)
     (define-key map (kbd "F") 'pancake-go-forward)
     (define-key map (kbd "Q") 'pancake-quit)

@@ -93,6 +93,7 @@ showSexps uri ro =
     showDenotation :: Denotation -> String
     showDenotation (Link u) = list ["link", ".", encodeStr $ show u]
     showDenotation (Math m) = list ["math", ".", encodeStr m]
+    showDenotation (Heading l) = list ["heading", ".", show l]
 
 mergeStyled :: [Styled] -> [Styled]
 mergeStyled = foldr mergeStyled' []
