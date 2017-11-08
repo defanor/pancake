@@ -347,8 +347,7 @@ renderBlock P.HorizontalRule = do
   st <- get
   indented [[Fg Black $
              fromString $ replicate (columns st - indentationLevel st * 2) '-']]
-renderBlock (P.Table caption _ widths headers rows) = do
-  -- todo: don't ignore alignments
+renderBlock (P.Table caption aligns widths headers rows) = do
   indented =<< readInlines caption
   -- Use pandoc-provided widths if they are set, calculate them
   -- otherwise.
@@ -356,9 +355,8 @@ renderBlock (P.Table caption _ widths headers rows) = do
         [] -> False
         w -> minimum w /= maximum w
   ws <- if widthsAreSet then pure widths else do
-    lens <- map sum . transpose <$>
-      mapM (mapM (fmap (length . unstyled . concat . rLines) . renderCell 80))
-      rows
+    lens <- map sum . transpose <$> mapM
+      (mapM (fmap (length . unstyled . concat . rLines) . renderCell 80)) rows
     pure $ map (\l -> fromIntegral l / fromIntegral (sum lens)) lens
   mapM_ (\r -> renderBlock P.HorizontalRule >> tableRow ws r) (headers : rows)
   renderBlock P.HorizontalRule
@@ -368,20 +366,29 @@ renderBlock (P.Table caption _ widths headers rows) = do
       st <- get
       pure $ runRenderer w (linkCount st) (lineNumber st) $
         mapM_ renderBlock blocks
-    tableCell :: Int -> [P.Block] -> Renderer [StyledLine]
-    tableCell w blocks = do
+    tableCell :: (P.Alignment, Int, [P.Block]) -> Renderer [StyledLine]
+    tableCell (a, w, blocks) = do
       l <- renderCell w blocks
       mapM_ storeLink $ rLinks l
       tell $ map (uncurry RIdentifier) $ rIdentifiers l
-      pure $ map
-        (\x -> x ++ [fromString (replicate (w - length (unstyled x)) ' ')])
-        $ rLines l
+      pure $ map (padCell a w) $ rLines l
+    padCell :: P.Alignment -> Int -> StyledLine -> StyledLine
+    padCell a w x =
+      let pLen = w - length (unstyled x)
+          halfLen :: Rational
+          halfLen = fromIntegral pLen / 2
+          (lPad, rPad) = case a of
+            P.AlignRight -> (pLen, 0)
+            P.AlignCenter -> ( ceiling halfLen, floor halfLen )
+            _ -> (0, pLen)
+          mkPadding l = [fromString (replicate l ' ')]
+      in concat [mkPadding lPad, x, mkPadding rPad]
     tableRow :: [Double] -> [[P.Block]] -> Renderer ()
     tableRow ws cols = do
       st <- get
       let maxWidth = columns st - indentationLevel st - ((length cols - 1) * 3)
           widths' = map (\w -> floor (fromIntegral maxWidth * w)) ws
-      cells <- zipWithM tableCell widths' cols
+      cells <- mapM tableCell $ zip3 aligns widths' cols
       let maxLines = foldr (max . length) 0 cells
           padded = zipWith (\w c -> c ++ replicate (maxLines - length c)
                              [fromString $ replicate w ' ']) widths' cells
