@@ -16,6 +16,7 @@ module Pancake.Rendering ( Denotation(..)
                          , rLinks
                          , rLines
                          , rIdentifiers
+                         , rNotes
                          , renderDoc
                          ) where
 
@@ -62,6 +63,7 @@ type StyledLine = [Styled]
 -- | Renderer state.
 data RS = RS { indentationLevel :: Int
              , linkCount :: Int
+             , noteCount :: Int
              , lineNumber :: Int
              , listing :: Maybe Listing
              , columns :: Int
@@ -69,6 +71,7 @@ data RS = RS { indentationLevel :: Int
 
 -- | This is what gets rendered.
 data RendererOutput = RLink URI
+                    | RNote [RendererOutput]
                     | RLine StyledLine
                     | RIdentifier String Int
                     deriving (Show, Eq)
@@ -91,6 +94,12 @@ rIdentifiers [] = []
 rIdentifiers (RIdentifier s i:xs) = (s, i) : rIdentifiers xs
 rIdentifiers (_:xs) = rIdentifiers xs
 
+-- | Extracts notes.
+rNotes :: [RendererOutput] -> [[RendererOutput]]
+rNotes [] = []
+rNotes (RNote l:xs) = l : rNotes xs
+rNotes (_:xs) = rNotes xs
+
 -- | Used to render 'Pandoc' docs by writing text lines and collected
 -- links using 'Writer'.
 type Renderer a = WriterT [RendererOutput] (State RS) a
@@ -101,21 +110,39 @@ runRenderer :: Int
             -> Int
             -- ^ Link number to start with.
             -> Int
+            -- ^ Note number to start with.
+            -> Int
             -- ^ Line number to start with.
             -> Renderer a
             -- ^ A renderer.
             -> [RendererOutput]
             -- ^ Collected links and text lines.
-runRenderer cols ls ln r = snd $ evalState (runWriterT r)
-  (RS 0 ls ln Nothing cols)
+runRenderer cols ls ns ln r =
+  let o = snd $ evalState (runWriterT r)
+          (RS 0 ls ns ln Nothing cols)
+  in o ++ concatMap (map RLine . rLines) (rNotes o)
 
--- | Stores a link, increasing the counter
+-- | Stores a link, increasing the counter.
 storeLink :: URI -> Renderer Int
 storeLink u = do
   tell [RLink u]
   st <- get
   put (st { linkCount = linkCount st + 1 })
   pure $ linkCount st
+
+-- | Stores a note, increasing the counter.
+storeNote :: [RendererOutput] -> Renderer Int
+storeNote ro = do
+  st <- get
+  put $ st { noteCount = noteCount st + 1 }
+  mapM_ storeLink $ rLinks ro
+  let cnt = noteCount st
+      mark = Superscript . Fg Red . fromString $ "note " ++ show cnt
+      ro' = case ro of
+        (RLine l:rest) -> RLine (mark:l):rest
+        _ -> RLine [mark] : ro
+  tell [RNote ro']
+  pure cnt
 
 -- | Stores text lines.
 storeLines :: [StyledLine] -> Renderer ()
@@ -182,9 +209,11 @@ unstyled = concatMap unstyled'
     unstyled' (Underline s) = unstyled' s
     unstyled' (Bold s) = unstyled' s
     unstyled' (Emph s) = unstyled' s
-    unstyled' (Strikethrough s) = unstyled' s
-    unstyled' (Subscript s) = unstyled' s
-    unstyled' (Superscript s) = unstyled' s
+    -- Better to cut shorter lines than longer ones, so assuming CLI
+    -- mode.
+    unstyled' (Strikethrough s) = "-" ++ unstyled' s ++ "-"
+    unstyled' (Subscript s) = "_{" ++ unstyled' s ++ "}"
+    unstyled' (Superscript s) = "^{" ++ unstyled' s ++ "}"
     unstyled' (Fg _ s) = unstyled' s
     unstyled' (Denote _ s) = unstyled' s
 
@@ -304,7 +333,13 @@ readInline (P.Image attr alt (url, title)) = do
       cnt <- storeLink uri
       pure $ (map $ Denote (Link uri) . Fg Cyan) t ++
         [Fg Blue $ fromString (concat ["[", show cnt, "]"])]
-readInline (P.Note _) = pure . pure $ "(note: todo)"
+readInline (P.Note bs) = do
+  -- Minor issues are quite likely with this.
+  st <- get
+  let ro = runRenderer (columns st) (linkCount st) (noteCount st) 0
+           (renderBlocks bs)
+  cnt <- storeNote ro
+  pure [Superscript . Fg Red . fromString $ "[" ++ show cnt ++ "]"]
 readInline (P.Span attr i) = do
   storeAttr attr
   concat <$> mapM readInline i
@@ -364,12 +399,13 @@ renderBlock (P.Table caption aligns widths headers rows) = do
     renderCell :: Int -> [P.Block] -> Renderer [RendererOutput]
     renderCell w blocks = do
       st <- get
-      pure $ runRenderer w (linkCount st) (lineNumber st) $
+      pure $ runRenderer w (linkCount st) (noteCount st) (lineNumber st) $
         mapM_ renderBlock blocks
     tableCell :: (P.Alignment, Int, [P.Block]) -> Renderer [StyledLine]
     tableCell (a, w, blocks) = do
       l <- renderCell w blocks
       mapM_ storeLink $ rLinks l
+      modify (\s -> s { noteCount = noteCount s + length (rNotes l) })
       tell $ map (uncurry RIdentifier) $ rIdentifiers l
       pure $ map (padCell a w) $ rLines l
     padCell :: P.Alignment -> Int -> StyledLine -> StyledLine
@@ -415,4 +451,4 @@ renderDoc :: Int
           -> [RendererOutput]
           -- ^ Rendered document.
 renderDoc cols (P.Pandoc _ blocks) =
-  runRenderer cols 0 1 $ mapM_ renderBlockLn blocks
+  runRenderer cols 0 0 1 $ mapM_ renderBlockLn blocks
