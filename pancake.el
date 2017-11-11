@@ -122,9 +122,9 @@
   "Pancake browser process.")
 (make-variable-buffer-local 'pancake-process)
 
-(defvar pancake-current-uri nil
-  "Current URI.")
-(make-variable-buffer-local 'pancake-current-uri)
+(defvar pancake-uri-history '()
+  "History of visited URIs, limited by `history-length'.")
+(make-variable-buffer-local 'pancake-uri-history)
 
 ;;###autoload
 (defun pancake ()
@@ -222,6 +222,14 @@
   "Return t if STRING ends with a newline character."
   (char-equal (elt string (- (length string) 1)) ?\n))
 
+(defun pancake-uri-history-add (uri)
+  "Adds URI into `pancake-uri-history', or simply moves it into
+the list's `car' if it is already present."
+  (setq pancake-uri-history
+        (seq-take (cons uri (seq-remove (lambda (e) (string-equal e uri))
+                                        pancake-uri-history))
+                  history-length)))
+
 (defun pancake-process-filter (proc string)
   "Pancake process filter for stdout."
   (when (buffer-live-p (process-buffer proc))
@@ -238,8 +246,8 @@
                  ;; further manipulation
                  (let ((inhibit-read-only t))
                    (delete-region (point-min) (point-max))
-                   (setq pancake-current-uri (alist-get 'uri alist)
-                         pancake-headings '())
+                   (setq pancake-headings '())
+                   (pancake-uri-history-add (alist-get 'uri alist))
                    (dolist (line (alist-get 'lines alist))
                      (pancake-print-line line)
                      (newline))
@@ -312,9 +320,9 @@
 (defun pancake-display-current-uri ()
   "Display current URI and put it into the kill ring."
   (interactive)
-  (when pancake-current-uri
-    (message "%s" pancake-current-uri)
-    (kill-new pancake-current-uri)))
+  (when (consp pancake-uri-history)
+    (message "%s" (car pancake-uri-history))
+    (kill-new (car pancake-uri-history))))
 
 (defun pancake-next-button ()
   "Moves cursor to the next button."
@@ -346,11 +354,20 @@
     (when line
       (goto-line line))))
 
+(defun pancake-minibuffer-setup ()
+  "Removes itself from `minibuffer-setup-hook' and unsets SPC in
+that minibuffer, since there's usually no need to complete words,
+yet shortcuts should be entered easily."
+  (remove-hook 'minibuffer-setup-hook #'pancake-minibuffer-setup)
+  (local-unset-key (kbd "SPC")))
+
 (defun pancake-prompt (&optional string)
   "Prompts for input, passes it to `pancake-process'. Similar to
 `pancake-input', but runs immediately."
   (interactive)
-  (pancake-process-send (read-from-minibuffer "pancake> " string)))
+  (add-hook 'minibuffer-setup-hook #'pancake-minibuffer-setup)
+  (pancake-process-send
+   (completing-read "pancake> " pancake-uri-history nil nil string)))
 
 (defun pancake-input (string)
   "Pancake input handler: opens minibuffer for input.
