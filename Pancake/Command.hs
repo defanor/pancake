@@ -69,8 +69,7 @@ goTo = do
 -- | 'Shortcut' command parser.
 shortcut :: M.Map String String -> Parser Command
 shortcut m = do
-  s <- choice $ map (try . string) $ M.keys m
-  _ <- space
+  s <- choice $ map (\k -> try (string k <* space)) $ M.keys m
   case M.lookup s m of
     Nothing -> fail $ "No such shortcut: " ++ s
     Just u -> do
