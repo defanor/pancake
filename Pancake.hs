@@ -32,6 +32,7 @@ import Control.Exception
 import Data.Char
 import System.IO.Error
 import Control.Applicative
+import Data.Version
 
 import Pancake.Common
 import Pancake.Configuration
@@ -39,6 +40,7 @@ import Pancake.Command
 import Pancake.Reading
 import Pancake.Rendering
 import Pancake.Printing
+import Paths_pancake
 
 -- | A zipper kind of thing, for scrolling and history traversal.
 type Sliding a = ([a], [a])
@@ -250,6 +252,8 @@ eventLoop = do
 main :: IO ()
 main = do
   args <- getArgs
-  _ <- runStateT (updateConfig >> eventLoop) $
-    LS ([],[]) 0 [] def ("--embedded" `elem` args)
-  pure ()
+  if "--version" `elem` args
+    then putStrLn $ "pancake " ++ showVersion version
+    else runStateT (updateConfig >> eventLoop)
+         (LS ([],[]) 0 [] def ("--embedded" `elem` args))
+         >> pure ()
