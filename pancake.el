@@ -206,6 +206,8 @@
          (pancake-print-line rest)
          (make-text-button start (point)
                            'uri uri
+                           'help-echo uri
+                           'follow-link t
                            'action #'pancake-button-action))
         (`(denotation (heading . ,level) . ,rest)
          (pancake-print-line rest)
