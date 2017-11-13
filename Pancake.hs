@@ -229,7 +229,7 @@ command ShowCurrent = do
     ((u, _):_, _) -> liftIO $ putErrLn $ show u
     _ -> pure ()
 command (Shortcut u q) = command . GoTo Nothing . fromJust . parseURI $
-  u ++ escapeURIString isReserved q
+  u ++ escapeURIString isUnreserved q
 command ReloadConfig = updateConfig
 command Quit = liftIO $ do
     dir <- getXdgDirectory XdgCache "pancake"
