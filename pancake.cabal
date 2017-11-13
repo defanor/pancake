@@ -14,14 +14,19 @@ maintainer:          defanor@uberspace.net
 homepage:            https://defanor.uberspace.net/projects/pancake/
 bug-reports:         https://github.com/defanor/pancake/issues
 category:            Web
-build-type:          Simple
+build-type:          Custom
 extra-source-files:  ChangeLog.md
                    , README.org
                    , pancake.el
+                   , pancake.1
 cabal-version:       >=1.10
 source-repository head
   type:     git
   location: git://github.com/defanor/pancake.git
+custom-setup
+  setup-depends:       Cabal >= 1.24
+                     , base >= 4.9 && < 5
+                     , filepath >= 1.4.1.0 && < 2
 
 executable pancake
   main-is:             Pancake.hs
