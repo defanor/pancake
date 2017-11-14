@@ -381,7 +381,7 @@ it to `pancake-process' as input."
 
 (defvar pancake-mode-map
   (let ((map (make-sparse-keymap))
-        (chars (append (list ?? ?. ?/ ?#)
+        (chars (append (list ?? ?. ?/ ?# ?*)
                        (number-sequence ?0 ?9)
                        (number-sequence ?a ?z))))
     (dolist (char chars)
