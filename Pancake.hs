@@ -33,6 +33,7 @@ import Data.Char
 import System.IO.Error
 import Control.Applicative
 import Data.Version
+import System.Console.GetOpt
 
 import Pancake.Common
 import Pancake.Configuration
@@ -248,12 +249,23 @@ eventLoop = do
   command c
   when (c /= Quit) eventLoop
 
+data Option = OVersion | OHelp | OEmbedded deriving (Show)
+
+options :: [OptDescr Option]
+options = [ Option [] ["version"] (NoArg OVersion) "show version number and exit"
+          , Option [] ["help"] (NoArg OHelp) "show help message and exit"
+          , Option ['e'] ["embedded"] (NoArg OEmbedded)
+            "run in the embedded mode" ]
+
 -- | Loads configuration and runs 'eventLoop'.
 main :: IO ()
 main = do
   args <- getArgs
-  if "--version" `elem` args
-    then putStrLn $ "pancake " ++ showVersion version
-    else runStateT (updateConfig >> eventLoop)
-         (LS ([],[]) 0 [] def ("--embedded" `elem` args))
-         >> pure ()
+  let run e = runStateT (updateConfig >> eventLoop)
+              (LS ([],[]) 0 [] def e)
+              >> pure ()
+  case getOpt Permute options args of
+    ([], [], []) -> run False
+    ([OEmbedded], [], []) -> run True
+    ([OVersion], [], []) -> putStrLn $ "pancake " ++ showVersion version
+    _ -> putStrLn $ usageInfo "Usage: pancake [option ...]" options
