@@ -52,7 +52,7 @@
   :group 'pancake)
 
 (defface pancake-color-green-foreground
-  '((((type graphic) (class color) (background dark)) :foreground "light green")
+  '((((type graphic) (class color) (background dark)) :foreground "dark sea green")
     (((type graphic) (class color) (background light)) :foreground "dark green")
     (t :foreground "green"))
   "Foreground face for green color."
@@ -80,7 +80,7 @@
   :group 'pancake)
 
 (defface pancake-color-cyan-foreground
-  '((((type graphic) (class color) (background dark)) :foreground "light cyan")
+  '((((type graphic) (class color) (background dark)) :foreground "DarkSlateGray3")
     (((type graphic) (class color) (background light)) :foreground "dark cyan")
     (t :foreground "cyan"))
   "Foreground face for cyan color."
