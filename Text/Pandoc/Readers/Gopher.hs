@@ -18,6 +18,8 @@ import Text.Parsec.Text
 import Text.Pandoc.Readers.Plain
 import Text.Pandoc.Class
 import qualified Data.Text as T
+import Control.Monad.Except (throwError)
+import Text.Pandoc.Error
 
 
 -- | UNASCII   ::= ASCII - [Tab CR-LF NUL].
@@ -51,19 +53,31 @@ pLink = do
       prefix = mkPrefix $ case t of
         '0' -> "(text)"
         '1' -> "(dir)"
+        '3' -> "(err)"
         'h' -> "(html)"
         '9' -> "(bin)"
+        'g' -> "(gif)"
         'I' -> "(img)"
         's' -> "(snd)"
         '7' -> "(srch)"
         _   -> "(?)"
-  pure [Link (name, [], []) (prefix ++ lineToInlines name) (uri, ""), LineBreak]
+      line = case t of
+        '3' -> prefix ++ lineToInlines name
+        _ -> [Link (name, [], []) (prefix ++ lineToInlines name) (uri, "")]
+  pure $ line ++ [LineBreak]
+
+-- | An erroneous directory entry. Still parsing it, since there is a
+-- lot of broken directories out there -- but marking as an error.
+pError :: Parser [Inline]
+pError = do
+  line <- manyTill anyChar (lookAhead $ try pEOL)
+  pure $ [Strong $ mkPrefix "error"] ++ lineToInlines line ++ [LineBreak]
 
 -- | Parses last line, with adjustments for what's used in the wild.
 pLastLine :: Parser ()
--- Sometimes there's additional newline, sometimes there's no dot, and
--- sometimes LF is used instead of CRLF.
-pLastLine = optional (optional endOfLine *> char '.' *> endOfLine) *> eof
+-- Sometimes there's additional newline, sometimes there's no dot or
+-- multiple dots, and sometimes LF is used instead of CRLF.
+pLastLine = optional (try $ optional endOfLine *> char '.' *> endOfLine) *> eof
 
 -- | Parses end-of-line, skipping Gopher+ extensions if present.
 pEOL :: Parser ()
@@ -72,14 +86,16 @@ pEOL = (endOfLine *> pure ())
 
 -- | Parses a directory.
 pDirEntries :: Parser [Inline]
-pDirEntries = concat <$> manyTill (choice [pInfo, pLink] <* pEOL) pLastLine
+pDirEntries = concat <$>
+  manyTill (choice ([ try pInfo <?> "info entry"
+                    , try pLink <?> "link entry"
+                    , pError <?> "erroneous entry"])
+             <* pEOL)
+  pLastLine
 
--- | Reads Gopher directory entries, falls back to plain text on
--- failure.
+-- | Reads Gopher directory entries.
 readGopher :: PandocMonad m => T.Text -> m Pandoc
-readGopher s = pure . Pandoc mempty . pure . Plain $
+readGopher s =
   case parse pDirEntries "directory entry" s of
-    -- fallback to plain text
-    Left _ ->
-      concatMap (\l -> (lineToInlines $ T.unpack l) ++ [LineBreak]) $ T.lines s
-    Right r -> r
+    Left err -> throwError $ PandocParseError $ show err
+    Right r -> pure . Pandoc mempty . pure $ Plain r
