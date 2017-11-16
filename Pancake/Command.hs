@@ -21,6 +21,7 @@ import Pancake.Configuration
 
 -- | Interactive user command.
 data Command = Quit
+             | Interrupt
              | Follow Int
              | More
              | GoTo (Maybe String) URI

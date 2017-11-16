@@ -34,6 +34,8 @@ import System.IO.Error
 import Control.Applicative
 import Data.Version
 import System.Console.GetOpt
+import System.Posix.Signals
+import Control.Concurrent
 
 import Pancake.Common
 import Pancake.Configuration
@@ -52,6 +54,7 @@ data LoopState = LS { history :: Sliding (URI, P.Pandoc)
                     , rendered :: [RendererOutput]
                     , conf :: Config
                     , embedded :: Bool
+                    , interrupted :: Bool
                     } deriving (Show)
 
 -- | Renders a parsed document.
@@ -174,7 +177,7 @@ command (Follow i) = do
   st <- get
   if length (rLinks $ rendered st) > i
     then command (GoTo Nothing $ rLinks (rendered st) !! i)
-    else liftIO $ putErrLn "No such link"
+    else putErrLn "No such link"
 command Back = do
   st <- get
   case history st of
@@ -182,7 +185,7 @@ command Back = do
       printDoc uri d
       modify $ \s ->
         s { history = (p:prev, take (historyDepth $ conf s) $ cur : next) }
-    _ -> liftIO $ putErrLn "There's nothing back there"
+    _ -> putErrLn "There's nothing back there"
 command Forward = do
   st <- get
   case history st of
@@ -190,7 +193,7 @@ command Forward = do
       printDoc uri d
       modify $ \s ->
         s { history = (take (historyDepth $ conf s) $ n : prev, next) }
-    _ -> liftIO $ putErrLn "Nowhere to go"
+    _ -> putErrLn "Nowhere to go"
 command More = do
   st <- get
   unless (embedded st) $ do
@@ -212,45 +215,55 @@ command Reload = do
     _ -> putErrLn "There's nothing to reload"
 command Help = do
   st <- get
-  liftIO $ do
-    putErrLn $ intercalate "\n"
-      [ "[q]uit, [b]ack, [f]orward, [h]elp, [r]eload, [re]load config"
-      , "type a number to follow a link, \"?<number>\" to print its URI"
-      , "type an URI (absolute or relative) to open it"
-      , "prefix it with a type (html, txt, org, etc) to choose a reader"]
-    when (paginate $ conf st) $ putErrLn "RET to scroll"
+  putErrLn $ intercalate "\n"
+    [ "[q]uit, [b]ack, [f]orward, [h]elp, [r]eload, [re]load config"
+    , "type a number to follow a link, \"?<number>\" to print its URI"
+    , "type an URI (absolute or relative) to open it"
+    , "prefix it with a type (html, txt, org, etc) to choose a reader"]
+  when (paginate $ conf st) $ putErrLn "RET to scroll"
 command (Show n) = do
   st <- get
-  liftIO . putErrLn $ if length (rLinks $ rendered st) > n
-                      then show $ rLinks (rendered st) !! n
-                      else "No such link"
+  putErrLn $ if length (rLinks $ rendered st) > n
+             then show $ rLinks (rendered st) !! n
+             else "No such link"
 command ShowCurrent = do
   st <- get
   case history st of
-    ((u, _):_, _) -> liftIO $ putErrLn $ show u
+    ((u, _):_, _) -> putErrLn $ show u
     _ -> pure ()
 command (Shortcut u q) = command . GoTo Nothing . fromJust . parseURI $
   u ++ escapeURIString isUnreserved q
 command ReloadConfig = updateConfig
 command Quit = liftIO $ do
-    dir <- getXdgDirectory XdgCache "pancake"
-    exists <- doesDirectoryExist dir
-    when exists $ removeDirectoryRecursive dir
+  dir <- getXdgDirectory XdgCache "pancake"
+  exists <- doesDirectoryExist dir
+  when exists $ removeDirectoryRecursive dir
+command Interrupt =
+  putErrLn "Received SIGINT. Interrupt twice in a row to quit."
 
 -- | Reads commands, runs them.
 eventLoop :: MonadIO m => StateT LoopState m ()
 eventLoop = do
-  cmd' <- liftIO $ try getLine
-  let onErr e = unless (isEOFError e)
-                (putErrLn ("Unexpected error: " ++ show e))
-                >> pure Quit
   st <- get
-  c <- either onErr (pure . parseCommand (conf st)) cmd'
-  command c
-  when (c /= Quit) eventLoop
+  c <- liftIO $ catches (parseCommand (conf st) <$> getLine)
+       [Handler handleIO, Handler handleAsync]
+  unless (c == Interrupt && interrupted st) $ do
+    command c
+    modify $ \s -> s { interrupted = c == Interrupt }
+    when (c /= Quit) eventLoop
+  where
+    handleIO :: IOException -> IO Command
+    handleIO e = unless (isEOFError e)
+                 (putErrLn ("Unexpected error: " ++ show e))
+                 >> pure Quit
+    handleAsync :: AsyncException -> IO Command
+    handleAsync UserInterrupt = pure Interrupt
+    handleAsync other = throw other
 
+-- | Command-line options.
 data Option = OVersion | OHelp | OEmbedded deriving (Show)
 
+-- | Command-line option descriptions for 'getOpt'.
 options :: [OptDescr Option]
 options = [ Option [] ["version"] (NoArg OVersion) "show version number and exit"
           , Option [] ["help"] (NoArg OHelp) "show help message and exit"
@@ -261,8 +274,11 @@ options = [ Option [] ["version"] (NoArg OVersion) "show version number and exit
 main :: IO ()
 main = do
   args <- getArgs
+  -- A hack to receive SIGINT reliably.
+  tid <- myThreadId
+  _ <- installHandler sigINT (Catch (throwTo tid UserInterrupt)) Nothing
   let run e = runStateT (updateConfig >> eventLoop)
-              (LS ([],[]) 0 [] def e)
+              (LS ([],[]) 0 [] def e False)
               >> pure ()
   case getOpt Permute options args of
     ([], [], []) -> run False
