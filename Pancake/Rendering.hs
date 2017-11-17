@@ -336,7 +336,9 @@ readInline (P.Image attr alt (url, title)) = do
 readInline (P.Note bs) = do
   -- Minor issues are quite likely with this.
   st <- get
-  let ro = runRenderer (columns st) (linkCount st) (noteCount st) 0
+  -- 12 is somewhat arbitrary, but narrowing the rendered notes so
+  -- that "^{note xxx}" could be added without overflow.
+  let ro = runRenderer (columns st - 12) (linkCount st) (noteCount st) 0
            (renderBlocks bs)
   cnt <- storeNote ro
   pure [Superscript . Fg Red . fromString $ "[" ++ show cnt ++ "]"]
