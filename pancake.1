@@ -9,10 +9,12 @@ pancake [\fIoption ...\fR]
 .SH OPTIONS
 .IP "\fB\-\-version\fR"
 Print version and exit.
+.IP "\fB\-\-help\fR"
+Print a help message.
 .IP "\fB\-\-embedded\fR"
 Run in the embedded mode.
 
 .SH SIGNALS
 .IP "\fBSIGINT\fR"
-Pass SIGINT to the child process, if it's active.
-
+Pass SIGINT to the child process, if it's active. Otherwise, quit if
+it's the second SIGINT in a row (without any input between those).
