@@ -37,6 +37,8 @@ executable pancake
                      , Pancake.Reading
                      , Pancake.Rendering
                      , Pancake.Printing
+                     , Pancake.Command
+                     , Paths_pancake
   build-depends:       base >= 4.9 && < 5
                      , bytestring >= 0.10.8.1 && < 1
                      , containers >= 0.5.7.1 && < 1
