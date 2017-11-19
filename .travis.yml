@@ -1,0 +1,15 @@
+language: haskell
+
+ghc:
+  - "8.0.1"
+  - "8.0.2"
+  - "8.2.1"
+
+cache:
+  directories:
+    - $HOME/.cabal/packages
+
+install:
+  # Pandoc build takes too much time and memory for travis defaults
+  # with cabal defaults.
+  - travis_wait 60 cabal install --only-dependencies --enable-tests -O0

@@ -6,7 +6,7 @@ description:         Pancake is a CLI web/gopher/file browser inspired
                      parsing, on curl and other external applications
                      for data loading, on emacs and other applications
                      to provide user interfaces.
-tested-with:         GHC == 8.0.1
+tested-with:         GHC == 8.0.1, GHC == 8.0.2, GHC == 8.2.1
 license:             GPL-3
 license-file:        LICENSE
 author:              defanor
