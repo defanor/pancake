@@ -1,5 +1,15 @@
 # Revision history for pancake
 
+## 0.1.5 -- 2017-11-20
+
+* A man page is added.
+* Slightly improved SIGINT handling.
+* Gopher directory parsing is relaxed.
+* Handling of --help and --version options.
+* Minor bugfixes and Emacs interface improvements.
+* Makefile is introduced to generate binary releases.
+
+
 ## 0.1.4 -- 2017-11-12
 
 * Handling of footnotes and table column alignments.

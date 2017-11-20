@@ -1,5 +1,5 @@
 Package: pancake
-Version: 0.1.4
+Version: 0.1.5
 Maintainer: defanor <defanor@uberspace.net>
 Description: A CLI/Emacs web/gopher/file browser.
  Pancake utilizes pandoc and external downloaders such as curl, adding
