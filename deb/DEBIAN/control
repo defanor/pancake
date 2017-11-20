@@ -1,0 +1,15 @@
+Package: pancake
+Version: 0.1.4
+Maintainer: defanor <defanor@uberspace.net>
+Description: A CLI/Emacs web/gopher/file browser.
+ Pancake utilizes pandoc and external downloaders such as curl, adding
+ support for Gopher directories and plain text files, and invoking
+ external applications (e.g., image and PDF viewers) depending on its
+ configuration.
+Architecture: amd64
+Section: web
+Priority: extra
+Homepage: https://defanor.uberspace.net/projects/pancake/
+Depends: libtinfo5, zlib1g, libc6, libgmp10, libffi6
+Recommends: curl
+Suggests: rlwrap

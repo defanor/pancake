@@ -11,9 +11,13 @@ be combined with software that provides better user interfaces -- such
 as emacs, rlwrap, tmux, screen.
 
 * Installation
+** Pancake
+~cabal install~ would build and install pancake and its documentation.
+Alternatively, basic Debian packages and binary releases are
+available.
 
-Use ~cabal install~ to install pancake, ~M-x package-install-file RET
-/path/to/pancake.el RET~ to install its emacs interface. To set it as
+** Emacs interface
+~M-x package-install-file RET /path/to/pancake.el RET~. To set it as
 your default emacs browser:
 
 #+BEGIN_SRC elisp

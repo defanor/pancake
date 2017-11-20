@@ -19,6 +19,8 @@ extra-source-files:  ChangeLog.md
                    , README.org
                    , pancake.el
                    , pancake.1
+                   , Makefile
+                   , deb/DEBIAN/control
 cabal-version:       >=1.10
 source-repository head
   type:     git
