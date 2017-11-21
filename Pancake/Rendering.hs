@@ -227,8 +227,12 @@ fitLines maxLen inlineBits = concatMap (map reverse . fitWords [] 0) inlineBits
   where
     splitStyled :: Styled -> [Styled]
     splitStyled (Plain s)
-      | length s > maxLen = let (t, d) = splitAt maxLen s in
-          Plain t : splitStyled (Plain d)
+      | length s > maxLen =
+        case reverse (takeWhile (<= maxLen) (findIndices isSpace s)) of
+          (n:_) -> let (t, _:d) = splitAt n s
+                   in Plain t : splitStyled (Plain d)
+          [] -> let (t, d) = splitAt maxLen s
+                in Plain t : splitStyled (Plain d)
       | otherwise = [Plain s]
     splitStyled (Underline s) = map Underline $ splitStyled s
     splitStyled (Bold s) = map Bold $ splitStyled s
