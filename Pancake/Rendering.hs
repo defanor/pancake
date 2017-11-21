@@ -392,7 +392,8 @@ renderBlock (P.Table caption aligns widths headers rows) = do
   ws <- if widthsAreSet then pure widths else do
     lens <- map sum . transpose <$> mapM
       (mapM (fmap (length . unstyled . concat . rLines) . renderCell 80)) rows
-    pure $ map (\l -> fromIntegral l / fromIntegral (sum lens)) lens
+    pure $ map (\l -> fromIntegral l / fromIntegral (sum lens) * 0.7
+                      + 1 / fromIntegral (length lens) * 0.3) lens
   mapM_ (\r -> renderBlock P.HorizontalRule >> tableRow ws r) (headers : rows)
   renderBlock P.HorizontalRule
   where
