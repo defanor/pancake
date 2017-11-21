@@ -209,11 +209,9 @@ unstyled = concatMap unstyled'
     unstyled' (Underline s) = unstyled' s
     unstyled' (Bold s) = unstyled' s
     unstyled' (Emph s) = unstyled' s
-    -- Better to cut shorter lines than longer ones, so assuming CLI
-    -- mode.
-    unstyled' (Strikethrough s) = "-" ++ unstyled' s ++ "-"
-    unstyled' (Subscript s) = "_{" ++ unstyled' s ++ "}"
-    unstyled' (Superscript s) = "^{" ++ unstyled' s ++ "}"
+    unstyled' (Strikethrough s) = unstyled' s
+    unstyled' (Subscript s) = unstyled' s
+    unstyled' (Superscript s) = unstyled' s
     unstyled' (Fg _ s) = unstyled' s
     unstyled' (Denote _ s) = unstyled' s
 
@@ -287,9 +285,9 @@ readInline (P.Str s)
   | otherwise = pure [fromString s]
 readInline (P.Emph s) = concatMap (map Emph) <$> mapM readInline s
 readInline (P.Strong s) = concatMap (map Bold) <$> mapM readInline s
-readInline (P.Strikeout s) = concatMap (map Strikethrough) <$> mapM readInline s
-readInline (P.Superscript s) = concatMap (map Superscript) <$> mapM readInline s
-readInline (P.Subscript s) = concatMap (map Subscript) <$> mapM readInline s
+readInline (P.Strikeout s) = map Strikethrough <$> wrappedInlines "-" "-" s
+readInline (P.Superscript s) = map Superscript <$> wrappedInlines "^{" "}" s
+readInline (P.Subscript s) = map Subscript <$> wrappedInlines "_{" "}" s
 readInline (P.SmallCaps s) = wrappedInlines "\\sc{" "}" s
 readInline (P.Quoted P.SingleQuote s) = wrappedInlines "‘" "’" s
 readInline (P.Quoted P.DoubleQuote s) = wrappedInlines "“" "”" s

@@ -30,12 +30,9 @@ propertize t (Bold s) =
   fromMaybe id (getCapability t withBold) $ propertize t s
 propertize t (Emph s) =
   fromMaybe id (getCapability t withStandout) $ propertize t s
-propertize t (Strikethrough s) =
-  mconcat [termText "-", propertize t s, termText "-"]
-propertize t (Subscript s) =
-  mconcat [termText "_{", propertize t s, termText "}"]
-propertize t (Superscript s) =
-  mconcat [termText "^{", propertize t s, termText "}"]
+propertize t (Strikethrough s) = propertize t s
+propertize t (Subscript s) = propertize t s
+propertize t (Superscript s) = propertize t s
 propertize t (Underline s) =
   fromMaybe id (getCapability t withUnderline) $ propertize t s
 propertize t (Denote _ s) = propertize t s
