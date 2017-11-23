@@ -449,13 +449,13 @@ renderBlock (P.Div attr b) = do
   renderBlocks b
 renderBlock P.Null = pure ()
 
--- | Renders a block element followed by an empy line.
-renderBlockLn :: P.Block -> Renderer ()
-renderBlockLn b = renderBlock b >> storeLines [[]]
+-- | Renders block elements with empy lines between them.
+spacedBlocks :: [P.Block] -> Renderer ()
+spacedBlocks b = sequence_ (intersperse (storeLines [[]]) $ map renderBlock b)
 
 -- | Renders multiple block elements.
 renderBlocks :: [P.Block] -> Renderer ()
-renderBlocks b = withIndent $ mapM_ renderBlockLn b
+renderBlocks b = withIndent $ spacedBlocks b
 
 -- | Renders a document.
 renderDoc :: Int
@@ -467,4 +467,4 @@ renderDoc :: Int
           -> [RendererOutput]
           -- ^ Rendered document.
 renderDoc cols ds (P.Pandoc _ blocks) =
-  runRenderer cols 0 0 1 ds $ mapM_ renderBlockLn blocks
+  runRenderer cols 0 0 1 ds $ spacedBlocks blocks

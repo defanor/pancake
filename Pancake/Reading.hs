@@ -121,7 +121,7 @@ readDoc :: BS.ByteString
         -- ^ A parsed document.
 readDoc out dt uri = do
   term <- setupTermFromEnv
-  let reader = either (const plain) id $
+  let (reader, exts) = either (const plain) id $
         maybe (Left "no type suggestions") (byExtension . ('.':)) dt
          <|> case (uriScheme uri, map toLower $ takeExtension $ uriPath uri) of
                -- some exceptions and special cases (might be better to make
@@ -141,14 +141,14 @@ readDoc out dt uri = do
                  _ -> byExtension ext <|> gopher
                (_, ext) -> byExtension ext
       cols = fromMaybe 80 $ getCapability term termColumns
-      opts = def { P.readerColumns = cols }
+      opts = def { P.readerColumns = cols, P.readerExtensions = exts }
   case reader of
-    (P.TextReader f, _) -> case decodeUtf8' out of
+    P.TextReader f -> case decodeUtf8' out of
       Left err -> do
         putErrLn $ show err
         P.runIO $ f opts $ decodeLatin1 out
       Right r -> P.runIO $ f opts r
-    (P.ByteStringReader f, _) -> P.runIO $ f opts $ BL.fromStrict out
+    P.ByteStringReader f -> P.runIO $ f opts $ BL.fromStrict out
   where
     http ext = byExtension ext <|> html
     html = P.getReader "html"
