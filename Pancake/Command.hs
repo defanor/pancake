@@ -15,6 +15,9 @@ import Network.URI
 import Text.Parsec
 import Text.Parsec.String
 import qualified Data.Map as M
+import Numeric
+import Data.List
+import Data.Maybe
 
 import Pancake.Configuration
 
@@ -52,13 +55,19 @@ basicCommand = choice . map (\(s, c) -> try (string s <* eof) *> pure c) $
   , ("?", ShowCurrent)
   , ("", More)]
 
+pReference :: String -> Parser Int
+pReference digits = do
+  ds <- many1 (choice $ map char digits)
+  pure . fst . head $ readInt (length digits)
+    (`elem` digits) (fromJust . flip elemIndex digits) ds
+
 -- | 'Follow' command parser.
-followRef :: Parser Command
-followRef = Follow . read <$> many1 digit <* eof
+followRef :: String -> Parser Command
+followRef digits = Follow <$> (optional (char '.') *> pReference digits <* eof)
 
 -- | 'Show' command parser.
-showRef :: Parser Command
-showRef = char '?' *> (Show . read <$> many1 digit) <* eof
+showRef :: String -> Parser Command
+showRef digits = Show <$> (char '?' *> pReference digits <* eof)
 
 -- | 'GoTo' command parser.
 goTo :: Parser Command
@@ -82,8 +91,8 @@ command :: Config -> Parser Command
 command c =
   choice (map try
           [ basicCommand <?> "basic command"
-          , followRef <?> "follow ref"
-          , showRef <?> "show ref"
+          , followRef (referenceDigits c) <?> "follow ref"
+          , showRef (referenceDigits c) <?> "show ref"
           , shortcut (shortcuts c) <?> "shortcut"
           , goTo <?> "go to"
           ])

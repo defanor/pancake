@@ -44,6 +44,9 @@ data Config = Config { commands :: M.Map String String
                      , historyDepth :: Int
                      -- ^ The amount of history entries (into either
                      -- direction) to keep.
+                     , referenceDigits :: String
+                     -- ^ Digits to use for reference numbering, must
+                     -- be unique.
                      } deriving (Generic, Show)
 
 -- | For configuration parsing.
@@ -78,6 +81,7 @@ instance Default Config where
       , ("vs", "gopher://gopher.floodgap.com/7/v2/vs?")]
     , paginate = True
     , historyDepth = 100
+    , referenceDigits = "0123456789"
     }
 
 -- | Loads configuration from an XDG config directory.

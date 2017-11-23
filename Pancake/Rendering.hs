@@ -29,6 +29,7 @@ import Control.Monad.Writer
 import Control.Monad.State
 import System.FilePath
 import Data.Char
+import Numeric
 
 
 -- | The type of a list item that should be rendered next.
@@ -67,6 +68,7 @@ data RS = RS { indentationLevel :: Int
              , lineNumber :: Int
              , listing :: Maybe Listing
              , columns :: Int
+             , refDigits :: String
              } deriving (Show, Eq)
 
 -- | This is what gets rendered.
@@ -75,6 +77,9 @@ data RendererOutput = RLink URI
                     | RLine StyledLine
                     | RIdentifier String Int
                     deriving (Show, Eq)
+
+showRef :: String -> Int -> String
+showRef digits n = showIntAtBase (length digits) (digits !!) n ""
 
 -- | Extracts links.
 rLinks :: [RendererOutput] -> [URI]
@@ -113,13 +118,15 @@ runRenderer :: Int
             -- ^ Note number to start with.
             -> Int
             -- ^ Line number to start with.
+            -> String
+            -- ^ Digits to use for reference numbering.
             -> Renderer a
             -- ^ A renderer.
             -> [RendererOutput]
             -- ^ Collected links and text lines.
-runRenderer cols ls ns ln r =
+runRenderer cols ls ns ln ds r =
   let o = snd $ evalState (runWriterT r)
-          (RS 0 ls ns ln Nothing cols)
+          (RS 0 ls ns ln Nothing cols ds)
   in o ++ concatMap (map RLine . rLines) (rNotes o)
 
 -- | Stores a link, increasing the counter.
@@ -318,8 +325,9 @@ readInline (P.Link attr alt (url, title)) = do
       let color = case uri of
             (URI "" Nothing "" "" ('#':_)) -> Magenta
             _ -> Cyan
+      st <- get
       pure $ (map $ Denote (Link uri) . Fg color) t ++
-        [Fg Blue $ fromString (concat ["[", show cnt, "]"])]
+        [Fg Blue $ fromString (concat ["[", showRef (refDigits st) cnt, "]"])]
     Nothing -> pure [fromString title]
 readInline (P.Image attr alt (url, title)) = do
   storeAttr attr
@@ -333,15 +341,16 @@ readInline (P.Image attr alt (url, title)) = do
             (title', []) -> [fromString title']
             (_, alt') -> alt'
       cnt <- storeLink uri
+      st <- get
       pure $ (map $ Denote (Link uri) . Fg Cyan) t ++
-        [Fg Blue $ fromString (concat ["[", show cnt, "]"])]
+        [Fg Blue $ fromString (concat ["[", showRef (refDigits st) cnt, "]"])]
 readInline (P.Note bs) = do
   -- Minor issues are quite likely with this.
   st <- get
   -- 12 is somewhat arbitrary, but narrowing the rendered notes so
   -- that "^{note xxx}" could be added without overflow.
   let ro = runRenderer (columns st - 12) (linkCount st) (noteCount st) 0
-           (renderBlocks bs)
+           (refDigits st) (renderBlocks bs)
   cnt <- storeNote ro
   pure [Superscript . Fg Red . fromString $ "[" ++ show cnt ++ "]"]
 readInline (P.Span attr i) = do
@@ -404,8 +413,8 @@ renderBlock (P.Table caption aligns widths headers rows) = do
     renderCell :: Int -> [P.Block] -> Renderer [RendererOutput]
     renderCell w blocks = do
       st <- get
-      pure $ runRenderer w (linkCount st) (noteCount st) (lineNumber st) $
-        mapM_ renderBlock blocks
+      pure $ runRenderer w (linkCount st) (noteCount st) (lineNumber st)
+        (refDigits st) $ mapM_ renderBlock blocks
     tableCell :: (P.Alignment, Int, [P.Block]) -> Renderer [StyledLine]
     tableCell (a, w, blocks) = do
       l <- renderCell w blocks
@@ -451,9 +460,11 @@ renderBlocks b = withIndent $ mapM_ renderBlockLn b
 -- | Renders a document.
 renderDoc :: Int
           -- ^ Number of columns.
+          -> String
+          -- ^ Digits to use for reference numbering.
           -> P.Pandoc
           -- ^ Document to render.
           -> [RendererOutput]
           -- ^ Rendered document.
-renderDoc cols (P.Pandoc _ blocks) =
-  runRenderer cols 0 0 1 $ mapM_ renderBlockLn blocks
+renderDoc cols ds (P.Pandoc _ blocks) =
+  runRenderer cols 0 0 1 ds $ mapM_ renderBlockLn blocks

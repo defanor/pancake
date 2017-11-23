@@ -63,7 +63,7 @@ printDoc uri doc = do
   term <- liftIO setupTermFromEnv
   st <- get
   let cols = fromMaybe 80 $ getCapability term termColumns
-      l = renderDoc cols doc
+      l = renderDoc cols (referenceDigits $ conf st) doc
       textLines = rLines l
   modify (\s -> s { rendered = l })
   if embedded st
@@ -217,7 +217,7 @@ command Help = do
   st <- get
   putErrLn $ intercalate "\n"
     [ "[q]uit, [b]ack, [f]orward, [h]elp, [r]eload, [re]load config"
-    , "type a number to follow a link, \"?<number>\" to print its URI"
+    , "\"[.]<number>\" to follow a link, \"?<number>\" to print its URI"
     , "type an URI (absolute or relative) to open it"
     , "prefix it with a type (html, txt, org, etc) to choose a reader"]
   when (paginate $ conf st) $ putErrLn "RET to scroll"
