@@ -50,6 +50,7 @@ directory, and would look approximately like this:
 externalViewers:
   png: xdg-open "${FILE}"
   hs: emacsclient -n "${FILE}"
+indentDivs: false
 commands:
   gopher: torify curl "${URI}"
   ssh: scp "${URI_REGNAME}:${URI_PATH}" /dev/stdout

@@ -63,7 +63,7 @@ printDoc uri doc = do
   term <- liftIO setupTermFromEnv
   st <- get
   let cols = fromMaybe 80 $ getCapability term termColumns
-      l = renderDoc cols (referenceDigits $ conf st) doc
+      l = renderDoc cols (conf st) doc
       textLines = rLines l
   modify (\s -> s { rendered = l })
   if embedded st

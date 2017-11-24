@@ -31,6 +31,8 @@ import System.FilePath
 import Data.Char
 import Numeric
 
+import Pancake.Configuration
+
 
 -- | The type of a list item that should be rendered next.
 data Listing = Bulleted
@@ -68,7 +70,7 @@ data RS = RS { indentationLevel :: Int
              , lineNumber :: Int
              , listing :: Maybe Listing
              , columns :: Int
-             , refDigits :: String
+             , rsConf :: Config
              } deriving (Show, Eq)
 
 -- | This is what gets rendered.
@@ -118,15 +120,15 @@ runRenderer :: Int
             -- ^ Note number to start with.
             -> Int
             -- ^ Line number to start with.
-            -> String
-            -- ^ Digits to use for reference numbering.
+            -> Config
+            -- ^ Configuration.
             -> Renderer a
             -- ^ A renderer.
             -> [RendererOutput]
             -- ^ Collected links and text lines.
-runRenderer cols ls ns ln ds r =
+runRenderer cols ls ns ln cnf r =
   let o = snd $ evalState (runWriterT r)
-          (RS 0 ls ns ln Nothing cols ds)
+          (RS 0 ls ns ln Nothing cols cnf)
   in o ++ concatMap (map RLine . rLines) (rNotes o)
 
 -- | Stores a link, increasing the counter.
@@ -327,7 +329,8 @@ readInline (P.Link attr alt (url, title)) = do
             _ -> Cyan
       st <- get
       pure $ (map $ Denote (Link uri) . Fg color) t ++
-        [Fg Blue $ fromString (concat ["[", showRef (refDigits st) cnt, "]"])]
+        [Fg Blue $ fromString
+         (concat ["[", showRef (referenceDigits $ rsConf st) cnt, "]"])]
     Nothing -> pure [fromString title]
 readInline (P.Image attr alt (url, title)) = do
   storeAttr attr
@@ -343,14 +346,15 @@ readInline (P.Image attr alt (url, title)) = do
       cnt <- storeLink uri
       st <- get
       pure $ (map $ Denote (Link uri) . Fg Cyan) t ++
-        [Fg Blue $ fromString (concat ["[", showRef (refDigits st) cnt, "]"])]
+        [Fg Blue $ fromString
+         (concat ["[", showRef (referenceDigits $ rsConf st) cnt, "]"])]
 readInline (P.Note bs) = do
   -- Minor issues are quite likely with this.
   st <- get
   -- 12 is somewhat arbitrary, but narrowing the rendered notes so
   -- that "^{note xxx}" could be added without overflow.
   let ro = runRenderer (columns st - 12) (linkCount st) (noteCount st) 0
-           (refDigits st) (renderBlocks bs)
+           (rsConf st) (renderBlocks bs)
   cnt <- storeNote ro
   pure [Superscript . Fg Red . fromString $ "[" ++ show cnt ++ "]"]
 readInline (P.Span attr i) = do
@@ -372,19 +376,19 @@ renderBlock (P.CodeBlock attr s) = do
   indented $ map (pure . Fg Green . fromString) $ lines s
 renderBlock (P.RawBlock _ s) =
   indented $ map (pure . fromString) $ lines s
-renderBlock (P.BlockQuote bs) = renderBlocks bs
+renderBlock (P.BlockQuote bs) = withIndent $ renderBlocks bs
 renderBlock (P.OrderedList _ bs) = do
   zipWithM_ (\b n -> modify (\s -> s { listing = Just (Ordered n) })
                      >> keepIndent (mapM_ renderBlock b)) bs [1..]
   modify $ \s -> s { listing = Nothing }
 renderBlock (P.BulletList bs) = do
   mapM_ (\b -> modify (\s -> s { listing = Just Bulleted })
-               >> keepIndent (mapM_ renderBlock b)) bs
+               >> keepIndent (renderBlocks b)) bs
   modify $ \s -> s { listing = Nothing }
 renderBlock (P.DefinitionList dl) =
   let renderDefinition (term, definition) = do
         indented =<< map (map (Fg Yellow)) <$> readInlines term
-        mapM_ renderBlocks definition
+        withIndent $ mapM_ renderBlocks definition
   in mapM_ renderDefinition dl
 renderBlock (P.Header level attr i) = do
   storeAttr attr
@@ -414,7 +418,7 @@ renderBlock (P.Table caption aligns widths headers rows) = do
     renderCell w blocks = do
       st <- get
       pure $ runRenderer w (linkCount st) (noteCount st) (lineNumber st)
-        (refDigits st) $ mapM_ renderBlock blocks
+        (rsConf st) $ renderBlocks blocks
     tableCell :: (P.Alignment, Int, [P.Block]) -> Renderer [StyledLine]
     tableCell (a, w, blocks) = do
       l <- renderCell w blocks
@@ -446,25 +450,25 @@ renderBlock (P.Table caption aligns widths headers rows) = do
         $ transpose padded
 renderBlock (P.Div attr b) = do
   storeAttr attr
-  renderBlocks b
+  st <- get
+  let i = if indentDivs $ rsConf st
+          then withIndent
+          else id
+  i $ renderBlocks b
 renderBlock P.Null = pure ()
 
 -- | Renders block elements with empy lines between them.
-spacedBlocks :: [P.Block] -> Renderer ()
-spacedBlocks b = sequence_ (intersperse (storeLines [[]]) $ map renderBlock b)
-
--- | Renders multiple block elements.
 renderBlocks :: [P.Block] -> Renderer ()
-renderBlocks b = withIndent $ spacedBlocks b
+renderBlocks b = sequence_ (intersperse (storeLines [[]]) $ map renderBlock b)
 
 -- | Renders a document.
 renderDoc :: Int
           -- ^ Number of columns.
-          -> String
-          -- ^ Digits to use for reference numbering.
+          -> Config
+          -- ^ Configuration.
           -> P.Pandoc
           -- ^ Document to render.
           -> [RendererOutput]
           -- ^ Rendered document.
-renderDoc cols ds (P.Pandoc _ blocks) =
-  runRenderer cols 0 0 1 ds $ spacedBlocks blocks
+renderDoc cols cnf (P.Pandoc _ blocks) =
+  runRenderer cols 0 0 1 cnf $ renderBlocks blocks

@@ -47,7 +47,10 @@ data Config = Config { commands :: M.Map String String
                      , referenceDigits :: String
                      -- ^ Digits to use for reference numbering, must
                      -- be unique.
-                     } deriving (Generic, Show)
+                     , indentDivs :: Bool
+                     -- ^ Whether to add indentation for elements
+                     -- inside divs.
+                     } deriving (Generic, Show, Eq)
 
 -- | For configuration parsing.
 instance FromJSON Config
@@ -82,6 +85,7 @@ instance Default Config where
     , paginate = True
     , historyDepth = 100
     , referenceDigits = "0123456789"
+    , indentDivs = False
     }
 
 -- | Loads configuration from an XDG config directory.
