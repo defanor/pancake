@@ -50,7 +50,7 @@ pMeta = do
   t <- option Nothing $ do
     _ <- string "type: "
     optional $ try $ manyTill alphaNum (char '/')
-    t <- optionMaybe $ many1 alphaNum
+    t <- optionMaybe $ many1 $ choice [alphaNum, char '-']
     _ <- manyTill anyToken newline
     pure t
   eof
@@ -109,6 +109,25 @@ retrieve cmd uri = do
           Left _ -> pure $ Just (out, Nothing, Nothing)
           Right (bs, (u, t)) -> pure $ Just (bs, u, t)
 
+-- | An Emacs file variable parser. Extracts a mode if it's set.
+pEmacsMode :: Parser String
+pEmacsMode = do
+  _ <- manyTill (noneOf "\r\n") (string "-*-")
+  spaces
+  vs <- try fileVariable `sepEndBy` (char ';' >> spaces)
+  spaces
+  _ <- string "-*-"
+  maybe (fail "no mode variable found") pure (lookup "mode" vs)
+  where
+    fileVariable :: Parser (String, String)
+    fileVariable = do
+      -- this is restrictive, but should suffice for idiomatic names
+      name <- many1 (choice [alphaNum, char '-'])
+      char ':' >> spaces
+      val <- reverse . dropWhile isSpace . reverse <$> manyTill anyChar
+        (choice $ map (try . lookAhead . string) [";", "\n", "-*-"])
+      pure (name, val)
+
 -- | Parses a document into a Pandoc structure. The parser is chosen
 -- depending on the document type (if one is provided) or its URI.
 readDoc :: BS.ByteString
@@ -122,24 +141,26 @@ readDoc :: BS.ByteString
 readDoc out dt uri = do
   term <- setupTermFromEnv
   let (reader, exts) = either (const plain) id $
-        maybe (Left "no type suggestions") (byExtension . ('.':)) dt
-         <|> case (uriScheme uri, map toLower $ takeExtension $ uriPath uri) of
-               -- some exceptions and special cases (might be better to make
-               -- this configurable)
-               ("http:", ext) -> http ext
-               ("https:", ext) -> http ext
-               ("gopher:", ext) -> case uriPath uri of
-                 ('/':'1':_) -> gopher
-                 ('/':'h':_) -> html
-                 -- "0" should indicate plain text, but it's also the most
-                 -- suitable option for non-html markup. Not sure about this
-                 -- approach, but it's similar to ignoring HTTP content-type,
-                 -- and will do for now: better to render documents nicely
-                 -- when possible.
-                 ('/':'0':_) -> byExtension ext
-                 -- unknown or unrecognized item type
-                 _ -> byExtension ext <|> gopher
-               (_, ext) -> byExtension ext
+        maybe (Left "no type suggestions") byExtension dt
+        <|> case (uriScheme uri, map toLower $ takeExtension $ uriPath uri) of
+              -- some exceptions and special cases (might be better to make
+              -- this configurable)
+              ("http:", ext) -> http ext
+              ("https:", ext) -> http ext
+              ("gopher:", ext) -> case uriPath uri of
+                ('/':'1':_) -> gopher
+                ('/':'h':_) -> html
+                -- "0" should indicate plain text, but it's also the most
+                -- suitable option for non-html markup. Not sure about this
+                -- approach, but it's similar to ignoring HTTP content-type,
+                -- and will do for now: better to render documents nicely
+                -- when possible.
+                ('/':'0':_) -> byExtension' ext
+                -- unknown or unrecognized item type
+                _ -> byExtension' ext <|> gopher
+              (_, ext) -> byExtension' ext
+        <|> either (Left . show) byExtension
+        (parse pEmacsMode (uriToString id uri "") out)
       cols = fromMaybe 80 $ getCapability term termColumns
       opts = def { P.readerColumns = cols, P.readerExtensions = exts }
   case reader of
@@ -150,15 +171,15 @@ readDoc out dt uri = do
       Right r -> P.runIO $ f opts r
     P.ByteStringReader f -> P.runIO $ f opts $ BL.fromStrict out
   where
-    http ext = byExtension ext <|> html
+    http ext = byExtension' ext <|> html
     html = P.getReader "html"
     plain = (P.TextReader . const $ readPlain, P.emptyExtensions)
     gopher = pure (P.TextReader . const $ readGopher, P.emptyExtensions)
-    byExtension "" = Left "No extension"
-    byExtension ".md" = P.getReader "markdown"
-    byExtension ".htm" = html
-    byExtension ".ltx" = P.getReader "latex"
-    byExtension ".tex" = P.getReader "latex"
-    byExtension ".txt" = pure plain
-    byExtension ".plain" = pure plain
-    byExtension ext = P.getReader $ tail ext
+    byExtension' ext = byExtension $ dropWhile (== '.') ext
+    byExtension "md" = P.getReader "markdown"
+    byExtension "htm" = html
+    byExtension "ltx" = P.getReader "latex"
+    byExtension "tex" = P.getReader "latex"
+    byExtension "txt" = pure plain
+    byExtension "plain" = pure plain
+    byExtension ext = P.getReader ext
