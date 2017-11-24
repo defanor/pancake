@@ -235,7 +235,7 @@ fitLines :: Int
          -> [StyledLine]
          -- ^ Fitted lines.
 fitLines 0 _ = []
-fitLines maxLen inlineBits = concatMap (map reverse . fitWords [] 0) inlineBits
+fitLines maxLen inlineBits = concatMap (map reverse . fitWords') inlineBits
   where
     splitStyled :: Styled -> [Styled]
     splitStyled (Plain s)
@@ -254,6 +254,11 @@ fitLines maxLen inlineBits = concatMap (map reverse . fitWords [] 0) inlineBits
     splitStyled (Superscript s) = map Superscript $ splitStyled s
     splitStyled (Fg c s) = map (Fg c) $ splitStyled s
     splitStyled (Denote d s) = map (Denote d) $ splitStyled s
+    fitWords' :: [Styled] -> [StyledLine]
+    fitWords' ws
+      -- handle empty lines
+      | null (unstyled ws) = [[]]
+      | otherwise = fitWords [] 0 ws
     fitWords :: [Styled] -> Int -> [Styled] -> [StyledLine]
     fitWords curLine curLen (w:ws)
       -- handle newline characters
