@@ -39,6 +39,8 @@ data Listing = Bulleted
              | Ordered Int
              deriving (Show, Eq)
 
+-- | Denotations: information that can be ignored, but can also be
+-- used to improve the UI.
 data Denotation = Link URI
                 | Math String
                 | Heading Int
@@ -80,6 +82,7 @@ data RendererOutput = RLink URI
                     | RIdentifier String Int
                     deriving (Show, Eq)
 
+-- | Show a reference.
 showRef :: String -> Int -> String
 showRef digits n = showIntAtBase (length digits) (digits !!) n ""
 
