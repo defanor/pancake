@@ -16,7 +16,7 @@ bug-reports:         https://github.com/defanor/pancake/issues
 category:            Web
 build-type:          Custom
 extra-source-files:  ChangeLog.md
-                   , README.org
+                   , README
                    , pancake.el
                    , pancake.1
                    , Makefile
