@@ -89,6 +89,7 @@ showSexps uri ro =
                                  , showSexp s]
     showDenotation :: Denotation -> String
     showDenotation (Link u) = list ["link", ".", encodeStr $ show u]
+    showDenotation (Image u) = list ["image", ".", encodeStr $ show u]
     showDenotation (Math m) = list ["math", ".", encodeStr m]
     showDenotation (Heading l) = list ["heading", ".", show l]
 

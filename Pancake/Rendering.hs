@@ -42,6 +42,7 @@ data Listing = Bulleted
 -- | Denotations: information that can be ignored, but can also be
 -- used to improve the UI.
 data Denotation = Link URI
+                | Image URI
                 | Math String
                 | Heading Int
                 deriving (Show, Eq)
@@ -336,7 +337,7 @@ readInline (P.Link attr alt (url, title)) = do
             (URI "" Nothing "" "" ('#':_)) -> Magenta
             _ -> Cyan
       st <- get
-      pure $ (map $ Denote (Link uri) . Fg color) t ++
+      pure $ map (Denote (Link uri) . Fg color) t ++
         [Fg Blue $ fromString
          (concat ["[", showRef (referenceDigits $ rsConf st) cnt, "]"])]
     Nothing -> pure [fromString title]
@@ -353,7 +354,7 @@ readInline (P.Image attr alt (url, title)) = do
             (_, alt') -> alt'
       cnt <- storeLink uri
       st <- get
-      pure $ (map $ Denote (Link uri) . Fg Cyan) t ++
+      pure $ map (Denote (Image uri) . Fg Cyan) t ++
         [Fg Blue $ fromString
          (concat ["[", showRef (referenceDigits $ rsConf st) cnt, "]"])]
 readInline (P.Note bs) = do

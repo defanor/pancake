@@ -175,7 +175,7 @@
 
 (defun pancake-button-action (button)
   "An action to be invoked on button activation."
-  (funcall 'browse-url (button-get button 'uri)))
+  (funcall 'browse-url (button-get button 'pancake-uri)))
 
 (defun pancake-print-elem (element)
   "Translate ELEMENT into a string."
@@ -204,7 +204,16 @@
         (`(denotation (link . ,uri) . ,rest)
          (pancake-print-line rest)
          (make-text-button start (point)
-                           'uri uri
+                           'pancake-uri uri
+                           'pancake-type 'link
+                           'help-echo uri
+                           'follow-link t
+                           'action #'pancake-button-action))
+        (`(denotation (image . ,uri) . ,rest)
+         (pancake-print-line rest)
+         (make-text-button start (point)
+                           'pancake-uri uri
+                           'pancake-type 'image
                            'help-echo uri
                            'follow-link t
                            'action #'pancake-button-action))
