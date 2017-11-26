@@ -8,6 +8,7 @@ User command parsing.
 -}
 
 module Pancake.Command ( Command(..)
+                       , Reference(..)
                        , parseCommand
                        ) where
 
@@ -18,18 +19,23 @@ import qualified Data.Map as M
 import Numeric
 import Data.List
 import Data.Maybe
+import System.FilePath
 
 import Pancake.Configuration
 
+-- | The ways for a user to point to a document.
+data Reference = RURI URI
+               | RNumber Int
+               | RCurrent
+               deriving (Show, Eq)
 
 -- | Interactive user command.
 data Command = Quit
              | Interrupt
-             | Follow Int
              | More
-             | GoTo (Maybe String) URI
-             -- ^ Document type, URI
-             | Reload
+             | GoTo (Maybe String) Reference
+             -- ^ Document type, reference
+             | Save Reference (Maybe FilePath)
              | Back
              | Forward
              | Help
@@ -49,32 +55,64 @@ basicCommand = choice . map (\(s, c) -> try (string s <* eof) *> pure c) $
   [ ("q", Quit)
   , ("b", Back)
   , ("f", Forward)
-  , ("r", Reload)
-  , ("re", ReloadConfig)
-  , ("h", Help)
+  , (",", GoTo Nothing RCurrent)
+  , ("reload config", ReloadConfig)
+  , ("help", Help)
   , ("?", ShowCurrent)
   , ("", More)]
 
-pReference :: String -> Parser Int
-pReference digits = do
+-- | Link number parser.
+pNumber :: String -> Parser Int
+pNumber digits = do
+  optional (char ',')
   ds <- many1 (choice $ map char digits)
   pure . fst . head $ readInt (length digits)
     (`elem` digits) (fromJust . flip elemIndex digits) ds
 
--- | 'Follow' command parser.
+-- | 'GoTo' command parser for 'RNumber'.
 followRef :: String -> Parser Command
-followRef digits = Follow <$> (optional (char '.') *> pReference digits <* eof)
+followRef digits = GoTo Nothing . RNumber <$> (pNumber digits <* eof)
 
 -- | 'Show' command parser.
 showRef :: String -> Parser Command
-showRef digits = Show <$> (char '?' *> pReference digits <* eof)
+showRef digits = Show <$> (char '?' *> pNumber digits <* eof)
 
--- | 'GoTo' command parser.
+-- | 'URI' parser.
+pURI :: Parser URI
+pURI = do
+  s <- many1 (satisfy isAllowedInURI) <?> "URI"
+  maybe (fail "Failed to parse URI") pure $ parseURIReference s
+
+-- | 'FilePath' parser.
+pFilePath :: Parser FilePath
+pFilePath = do
+  p <- many1 anyChar
+  if isValid p then pure p else fail ("Invalid file path: " ++ p)
+
+-- | 'Save' command parser for 'RURI'.
+save :: Parser Command
+save = Save
+       <$> (string "save" *> spaces *> (RURI <$> pURI))
+       <*> (spaces *> optionMaybe pFilePath)
+       <* eof
+
+-- | 'Save' command parser for 'RNumber'.
+saveRef :: String -> Parser Command
+saveRef digits = Save
+                 <$> (string "save" *> spaces *> (RNumber <$> pNumber digits))
+                 <*> (spaces *> optionMaybe pFilePath) <* eof
+
+-- | 'Save' command parser for 'RCurrent'.
+saveCurrent :: Parser Command
+saveCurrent = Save RCurrent <$> (string "save" *> spaces *> char ','
+                                 *> spaces *> optionMaybe pFilePath <* eof)
+
+-- | 'GoTo' command parser for 'RURI'.
 goTo :: Parser Command
-goTo = do
-  f <- optionMaybe (try (many1 alphaNum <* space)) <?> "type"
-  s <- manyTill anyChar eof <?> "URI"
-  maybe (fail "Failed to parse URI") (pure . GoTo f) $ parseURIReference s
+goTo = GoTo
+       <$> (optionMaybe (try (many1 alphaNum <* space)) <?> "type")
+       <*> (RURI <$> pURI)
+       <* eof
 
 -- | 'Shortcut' command parser.
 shortcut :: M.Map String String -> Parser Command
@@ -94,5 +132,8 @@ command c =
           , followRef (referenceDigits c) <?> "follow ref"
           , showRef (referenceDigits c) <?> "show ref"
           , shortcut (shortcuts c) <?> "shortcut"
-          , goTo <?> "go to"
+          , saveRef (referenceDigits c) <?> "save ref"
+          , saveCurrent <?> "save current"
+          , save <?> "save"
+          , goTo <?> "follow uri"
           ])

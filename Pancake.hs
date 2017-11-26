@@ -81,15 +81,10 @@ updateConfig = do
   c <- loadConfig
   modify $ \s -> s { conf = c }
 
--- | Decides what to do with a given URI; either returns a document or
--- runs an external viewer. Used by both 'GoTo' and 'Reload'.
-loadDocument :: MonadIO m
-             => Maybe String
-             -- ^ Document type.
-             -> URI
-             -- ^ Document URI.
-             -> StateT LoopState m (URI, Maybe P.Pandoc)
-loadDocument sType rawURI = do
+-- | A wrapper around 'retrieve' that adjusts the URI.
+loadRaw :: MonadIO m => URI ->
+  StateT LoopState m (URI, Maybe (BS.ByteString, Maybe URI, Maybe String))
+loadRaw rawURI = do
   st <- get
   let ddg = isPrefixOf "/l/?kh=-1&uddg=" $ uriToString id rawURI ""
       adjustedURI = case (ddg, uriIsAbsolute rawURI, history st) of
@@ -104,41 +99,53 @@ loadDocument sType rawURI = do
         s -> init s
       cmd = fromMaybe (defaultCommand $ conf st) $
         M.lookup uScheme (commands $ conf st)
-  liftIO $ do
-    docData <- retrieve cmd adjustedURI
-    case docData of
-      Nothing -> pure (adjustedURI, mzero)
-      Just (rawDoc, mdURI, mdType) -> do
-        let effectiveURI = fromMaybe adjustedURI mdURI
-            fType = sType <|> mdType
-            ext = case (fType, takeExtension $ uriPath effectiveURI) of
-              (Just x, _) -> x
-              (_, '.':xs) -> map toLower xs
-              (_, other) -> other
-        case M.lookup ext (externalViewers $ conf st) of
-          Nothing -> do
-            doc <- readDoc rawDoc fType effectiveURI
-            case doc of
-              Left err -> do
-                putErrLn $ show err
-                pure (effectiveURI, mzero)
-              Right r -> pure (effectiveURI, pure r)
-          Just ev -> do
-            dir <- getXdgDirectory XdgCache "pancake"
-            let tmpPath = dir </> takeFileName (uriPath effectiveURI)
-            handle
-              (\(e :: SomeException) ->
-                 putErrLn (concat ["Failed to open `", tmpPath, "` with `"
-                                  , ev, "`: ", show e])) $ do
-              createDirectoryIfMissing True dir
-              BS.writeFile tmpPath rawDoc
-              curEnv <- getEnvironment
-              ec <- withCreateProcess
-                ((shell ev) { env = Just (("FILE", tmpPath) : curEnv) }) $
-                \_ _ _ p -> waitForProcess p
-              when (ec /= ExitSuccess) $
-                putErrLn $ "An error occured. Exit code: " ++ show ec
-            pure (effectiveURI, mzero)
+  doc <- liftIO $ retrieve cmd adjustedURI
+  pure (adjustedURI, doc)
+
+-- | Decides what to do with a given URI; either returns a document or
+-- runs an external viewer. Used by both 'GoTo' and 'Reload'.
+loadDocument :: MonadIO m
+             => Maybe String
+             -- ^ Document type.
+             -> URI
+             -- ^ Document URI.
+             -> StateT LoopState m (URI, Maybe P.Pandoc)
+loadDocument sType rawURI = do
+  st <- get
+  (adjustedURI, docData) <- loadRaw rawURI
+  case docData of
+    Nothing -> pure (adjustedURI, mzero)
+    Just (rawDoc, mdURI, mdType) -> liftIO $ do
+      let effectiveURI = fromMaybe adjustedURI mdURI
+          fType = sType <|> mdType
+          ext = case (fType, takeExtension $ uriPath effectiveURI) of
+            (Just x, _) -> x
+            (_, '.':xs) -> map toLower xs
+            (_, other) -> other
+      case M.lookup ext (externalViewers $ conf st) of
+        Nothing -> do
+          doc <- readDoc rawDoc fType effectiveURI
+          case doc of
+            Left err -> do
+              putErrLn $ show err
+              pure (effectiveURI, mzero)
+            Right r -> pure (effectiveURI, pure r)
+        Just ev -> do
+          dir <- getXdgDirectory XdgCache "pancake"
+          let tmpPath = dir </> takeFileName (uriPath effectiveURI)
+          handle
+            (\(e :: SomeException) ->
+               putErrLn (concat ["Failed to open `", tmpPath, "` with `"
+                                , ev, "`: ", show e])) $ do
+            createDirectoryIfMissing True dir
+            BS.writeFile tmpPath rawDoc
+            curEnv <- getEnvironment
+            ec <- withCreateProcess
+              ((shell ev) { env = Just (("FILE", tmpPath) : curEnv) }) $
+              \_ _ _ p -> waitForProcess p
+            when (ec /= ExitSuccess) $
+              putErrLn $ "An error occured. Exit code: " ++ show ec
+          pure (effectiveURI, mzero)
 
 -- | Visits an URI, updates history accordingly.
 goTo :: MonadIO m => Maybe String -> URI -> StateT LoopState m ()
@@ -154,7 +161,50 @@ goTo t u' = do
 
 -- | Evaluates user commands.
 command :: MonadIO m => Command -> StateT LoopState m ()
-command (GoTo t u@(URI _ _ _ _ ('#':xs))) = do
+command (Save (RURI uri') p) = do
+  (uri, mraw) <- loadRaw uri'
+  case mraw of
+    Nothing -> pure ()
+    Just (raw, euri, _) -> liftIO $ do
+      (targetDir, mTargetName) <- case p of
+        Nothing -> do
+          cacheDir <- getXdgDirectory XdgCache "pancake"
+          pure (cacheDir, Nothing)
+        Just fp -> do
+          exists <- doesDirectoryExist fp
+          pure $ case (exists, takeFileName fp) of
+            (True, _) -> (fp, Nothing)
+            (_, "") -> (fp, Nothing)
+            (False, fn) -> (takeDirectory fp, pure fn)
+      createDirectoryIfMissing True targetDir
+      let remoteURI = fromMaybe uri euri
+          remoteURIStr = uriToString id remoteURI ""
+          remoteFileName' = takeFileName $ uriPath remoteURI
+          remoteFileName = if remoteFileName' `elem` [".", "..", ""]
+                           then map escapeURI remoteURIStr
+                           else remoteFileName'
+          targetFileName = fromMaybe remoteFileName mTargetName
+          targetPath = targetDir </> targetFileName
+      e <- try $ BS.writeFile targetPath raw
+      putErrLn $ unwords $ case e of
+        Left (err :: SomeException) ->
+          ["Failed to write", targetPath ++ ":", show err]
+        Right _ -> ["Saved", remoteURIStr, "as", targetPath]
+  where
+    escapeURI c
+      | isPathSeparator c = '-'
+      | otherwise = c
+command (Save (RNumber i) p) = do
+  st <- get
+  if length (rLinks $ rendered st) > i
+    then command $ Save (RURI $ rLinks (rendered st) !! i) p
+    else putErrLn "No such link"
+command (Save RCurrent p) = do
+  st <- get
+  case history st of
+    ((u, _):_, _) -> command $ Save (RURI u) p
+    _ -> pure ()
+command (GoTo t (RURI u@(URI _ _ _ _ ('#':xs)))) = do
   -- follow an URI first, if it's not just a fragment
   case u of
     (URI "" Nothing "" "" _) -> pure ()
@@ -172,11 +222,11 @@ command (GoTo t u@(URI _ _ _ _ ('#':xs))) = do
           drop (position st) (rLines $ rendered st)
         modify (\s -> s { position = x + lineCount - 2 })
     (Just x, True) -> putSexpLn ["goto", show x]
-command (GoTo t u) = goTo t u
-command (Follow i) = do
+command (GoTo t (RURI u)) = goTo t u
+command (GoTo t (RNumber i)) = do
   st <- get
   if length (rLinks $ rendered st) > i
-    then command (GoTo Nothing $ rLinks (rendered st) !! i)
+    then command (GoTo t $ RURI $ rLinks (rendered st) !! i)
     else putErrLn "No such link"
 command Back = do
   st <- get
@@ -202,11 +252,11 @@ command More = do
         lineCount = lineCount' - div lineCount' 3
     showLines $ take lineCount $ drop (position st) (rLines $ rendered st)
     modify (\s -> s { position = position st + lineCount })
-command Reload = do
+command (GoTo t RCurrent) = do
   st <- get
   case history st of
     ((u, _):prev, next) -> do
-      (uri, d) <- loadDocument Nothing u
+      (uri, d) <- loadDocument t u
       case d of
         Nothing -> pure ()
         Just doc -> do
@@ -216,10 +266,8 @@ command Reload = do
 command Help = do
   st <- get
   putErrLn $ intercalate "\n"
-    [ "[q]uit, [b]ack, [f]orward, [h]elp, [r]eload, [re]load config"
-    , "\"[.]<number>\" to follow a link, \"?<number>\" to print its URI"
-    , "type an URI (absolute or relative) to open it"
-    , "prefix it with a type (html, txt, org, etc) to choose a reader"]
+    [ "basic commands: [b]ack, [f]orward, ',' to reload"
+    , "<URI> or [,]<number> to open a document" ]
   when (paginate $ conf st) $ putErrLn "RET to scroll"
 command (Show n) = do
   st <- get
@@ -231,7 +279,7 @@ command ShowCurrent = do
   case history st of
     ((u, _):_, _) -> putErrLn $ show u
     _ -> pure ()
-command (Shortcut u q) = command . GoTo Nothing . fromJust . parseURI $
+command (Shortcut u q) = command . GoTo Nothing . RURI . fromJust . parseURI $
   u ++ escapeURIString isUnreserved q
 command ReloadConfig = updateConfig
 command Quit = liftIO $ do

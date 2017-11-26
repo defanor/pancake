@@ -68,7 +68,7 @@ retrieve :: String
          -> URI
          -- ^ Document URI.
          -> IO (Maybe (BS.ByteString, Maybe URI, Maybe String))
-         -- ^ Document contents.
+         -- ^ File contents, effective URI, type.
 retrieve cmd uri = do
   putErrLn $ "Retrieving " ++ show uri
   curEnv <- getEnvironment
