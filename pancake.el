@@ -356,17 +356,17 @@ property. Returns a list of collected values."
 (defun pancake-go-backward ()
   "Go backward in history."
   (interactive)
-  (pancake-process-send "b"))
+  (pancake-process-send "["))
 
 (defun pancake-go-forward ()
   "Go forward in history."
   (interactive)
-  (pancake-process-send "f"))
+  (pancake-process-send "]"))
 
 (defun pancake-quit ()
   "Quit pancake."
   (interactive)
-  (pancake-process-send "q"))
+  (pancake-process-send "quit"))
 
 (defun pancake-reload ()
   "Reload the current document."
@@ -452,8 +452,8 @@ it to `pancake-process' as input."
     (define-key map (kbd "C-c C-u") 'pancake-display-current-uri)
     (define-key map (kbd "C-M-e") 'pancake-next-heading)
     (define-key map (kbd "C-M-a") 'pancake-previous-heading)
-    (define-key map (kbd "B") 'pancake-go-backward)
-    (define-key map (kbd "F") 'pancake-go-forward)
+    (define-key map (kbd "[") 'pancake-go-backward)
+    (define-key map (kbd "]") 'pancake-go-forward)
     (define-key map (kbd "Q") 'pancake-quit)
     (define-key map (kbd "R") 'pancake-reload)
     (define-key map (kbd "I") 'pancake-load-images)

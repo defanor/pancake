@@ -69,9 +69,9 @@ parseCommand c = either (const Help) id . parse (command c) "user input"
 -- | Basic (constant) command parser.
 basicCommand :: Parser Command
 basicCommand = choice . map (\(s, c) -> try (string s <* eof) *> pure c) $
-  [ ("q", Quit)
-  , ("b", Back)
-  , ("f", Forward)
+  [ ("quit", Quit)
+  , ("[", Back)
+  , ("]", Forward)
   , (",", GoTo Nothing RCurrent)
   , ("reload config", ReloadConfig)
   , ("help", Help)

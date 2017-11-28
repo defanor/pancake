@@ -100,7 +100,7 @@ directory, and would look approximately like this::
     type: %{content_type}
 
     "'
-  referenceDigits: 'rstwpxcvazdg'
+  referenceDigits: 'rstwfpxcvaqzdgb'
   shortcuts:
     g: https://m.gutenberg.org/ebooks/search.mobile/?query=
     ddg: https://duckduckgo.com/lite/?q=

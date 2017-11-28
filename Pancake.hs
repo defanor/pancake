@@ -288,7 +288,7 @@ command (GoTo t RCurrent) = do
 command Help = do
   st <- get
   putErrLn $ intercalate "\n"
-    [ "basic commands: [b]ack, [f]orward, ',' to reload"
+    [ "basic commands: [ and ] to go back or forward, ',' to reload"
     , "<URI> or [,]<number> to open a document" ]
   when (paginate $ conf st) $ putErrLn "RET to scroll"
 command (Show n) = do
