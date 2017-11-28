@@ -360,8 +360,8 @@ readInline (P.Link attr alt (url, title)) = do
     Nothing -> pure [fromString title]
 readInline (P.Image attr alt (url, title)) = do
   storeAttr attr
-  (Fg Red "img:" :) <$> case parseURIReference url of
-    Nothing -> pure [fromString title]
+  case parseURIReference url of
+    Nothing -> pure [Fg Red "i", fromString title]
     Just uri -> do
       a <- mapM readInline alt
       let t = case (title, concat a) of
@@ -371,7 +371,8 @@ readInline (P.Image attr alt (url, title)) = do
             (_, alt') -> alt'
       cnt <- storeLink uri
       st <- get
-      pure $ map (Denote (Image uri) . Fg Cyan) t ++
+      pure $ Denote (Image uri) (Fg Red "i") :
+        map (Denote (Link uri) . Fg Cyan) t ++
         [Fg Blue $ fromString
          (concat ["[", showRef (referenceDigits $ rsConf st) cnt, "]"])]
 readInline (P.Note bs) = do
