@@ -287,29 +287,30 @@ property. Returns a list of collected values."
     (with-current-buffer (process-buffer proc)
       (setq pancake-process-output (concat pancake-process-output string))
       (when (pancake-line-p pancake-process-output)
-        ;; there may be multiple lines, processing separately
-        (dolist (raw-line (split-string pancake-process-output "\n"))
-          (unless (string-empty-p raw-line)
-            (let ((output (read raw-line)))
-              (pcase output
-                (`(render . ,alist)
-                 ;; todo: maybe store identifiers and links for
-                 ;; further manipulation
-                 (let ((inhibit-read-only t))
-                   (delete-region (point-min) (point-max))
-                   (setq pancake-headings '())
-                   (pancake-uri-history-add (alist-get 'uri alist))
-                   (dolist (line (alist-get 'lines alist))
-                     (pancake-print-line line)
-                     (newline))
-                   (goto-char (point-min)))
-                 (run-hooks 'pancake-display-hook))
-                (`(goto ,line) (goto-line line))
-                ;; todo: check if the images were requested
-                ;; explicitly, don't just show all the images that get
-                ;; saved
-                (`(saved ,uri ,path) (pancake-insert-image uri path))))))
-        (setq pancake-process-output "")))))
+        (let ((raw-lines (split-string pancake-process-output "\n")))
+          (setq pancake-process-output "")
+          ;; there may be multiple lines, processing separately
+          (dolist (raw-line raw-lines)
+            (unless (string-empty-p raw-line)
+              (let ((output (read raw-line)))
+                (pcase output
+                  (`(render . ,alist)
+                   ;; todo: maybe store identifiers and links for
+                   ;; further manipulation
+                   (let ((inhibit-read-only t))
+                     (delete-region (point-min) (point-max))
+                     (setq pancake-headings '())
+                     (pancake-uri-history-add (alist-get 'uri alist))
+                     (dolist (line (alist-get 'lines alist))
+                       (pancake-print-line line)
+                       (newline))
+                     (goto-char (point-min)))
+                   (run-hooks 'pancake-display-hook))
+                  (`(goto ,line) (goto-line line))
+                  ;; todo: check if the images were requested
+                  ;; explicitly, don't just show all the images that get
+                  ;; saved
+                  (`(saved ,uri ,path) (pancake-insert-image uri path)))))))))))
 
 (defun pancake-process-stderr-filter (proc string)
   "Pancake process filter for stderr."
