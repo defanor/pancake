@@ -7,7 +7,7 @@
 ;; Created: 2017-10-28
 ;; Keywords: pandoc, web, gopher, browser
 ;; Homepage: https://defanor.uberspace.net/projects/pancake/
-;; Version: 0.1.5
+;; Version: 0.1.6
 
 ;; This file is not part of GNU Emacs.
 

@@ -1,5 +1,16 @@
 # Revision history for pancake
 
+## 0.1.6 -- 2017-11-28
+
+* New features:
+  * User-defined digits and radices for reference numbering.
+  * File saving.
+  * Image support in the Emacs interface.
+  * Handling of Emacs "mode" file variables.
+  * Optional div indentation.
+* Minor improvements and adjustments.
+
+
 ## 0.1.5 -- 2017-11-20
 
 * A man page is added.
