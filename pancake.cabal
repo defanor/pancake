@@ -57,7 +57,6 @@ executable pancake
                      , terminfo >= 0.4.0.2 && < 1
                      , text >= 1.2.2.2 && < 2
                      , unix >= 2.7.2.0 && < 3
-                     , utf8-string >= 1.0.1.1 && < 2
                      , yaml >= 0.8.23.3 && < 1
   -- hs-source-dirs:
   default-language:    Haskell2010
