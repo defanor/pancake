@@ -56,9 +56,9 @@ specific websites, e.g. webcomics, and perhaps specific images only.
 Commands
 --------
 
-:q: quit
-:b: back
-:f: forward
+:quit or EOF: quit pancake, cleaning the cache
+:[: back
+:]: forward
 :reload config: reload config
 :help: show a help message
 :?: show current URI
