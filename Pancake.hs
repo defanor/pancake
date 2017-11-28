@@ -179,6 +179,7 @@ goTo t u' = do
 command :: MonadIO m => Command -> StateT LoopState m ()
 command (Save (RURI uri') p) = do
   (uri, mraw) <- loadRaw uri'
+  st <- get
   case mraw of
     Nothing -> pure ()
     Just (raw, euri, _) -> liftIO $ do
@@ -202,10 +203,15 @@ command (Save (RURI uri') p) = do
           targetFileName = fromMaybe remoteFileName mTargetName
           targetPath = targetDir </> targetFileName
       e <- try $ BS.writeFile targetPath raw
-      putErrLn $ unwords $ case e of
+      case e of
         Left (err :: SomeException) ->
-          ["Failed to write", targetPath ++ ":", show err]
-        Right _ -> ["Saved", remoteURIStr, "as", targetPath]
+          putErrLn $ unwords ["Failed to write", targetPath ++ ":", show err]
+        Right () -> do
+          when (embedded st) $
+            putSexpLn [ "saved"
+                      , encodeSexpStr $ uriToString id uri' ""
+                      , encodeSexpStr targetPath]
+          putErrLn $ unwords ["Saved", remoteURIStr, "as", targetPath]
   where
     escapeURI c
       | isPathSeparator c = '-'

@@ -45,6 +45,13 @@ your default emacs browser::
   (require 'pancake)
   (setq browse-url-browser-function 'pancake-browse-url)
 
+To load and show all images automatically (not just after saving them
+manually)::
+
+  (add-hook 'pancake-display-hook 'pancake-load-images)
+
+Though it might be desirable to write a wrapper to only show those on
+specific websites, e.g. webcomics, and perhaps specific images only.
 
 Commands
 --------

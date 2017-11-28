@@ -26,6 +26,7 @@ Renderer output printing facilities.
 
 module Pancake.Printing ( showLines
                         , putSexpLn
+                        , encodeSexpStr
                         , showSexps
                         ) where
 
@@ -72,6 +73,15 @@ putSexpLn s = liftIO $ do
   putStrLn $ list s
   hFlush stdout
 
+-- | Encodes a string for use in s-expressions.
+encodeSexpStr :: String -> String
+encodeSexpStr s = concat ["\"", concatMap escape s, "\""]
+  where
+    escape '\\' = "\\\\"
+    escape '"' = "\\\""
+    escape '\n' = "\\n"
+    escape other = pure other
+
 -- | Prints rendered lines as s-expressions.
 showSexps :: MonadIO m => URI -> [RendererOutput] -> m ()
 showSexps uri ro =
@@ -82,18 +92,13 @@ showSexps uri ro =
               map (list . pure . unwords . map showSexp . mergeStyled)
               (rLines ro)
             , list $ "identifiers"
-              : map (\(i, l) -> list [encodeStr i, show l]) (rIdentifiers ro)
+              : map (\(i, l) -> list [encodeSexpStr i, show l]) (rIdentifiers ro)
             , list $ "links"
-              : map (\u -> encodeStr $ uriToString id u "") (rLinks ro)
-            , list ["uri", ".", encodeStr $ uriToString id uri ""]]
+              : map (\u -> encodeSexpStr $ uriToString id u "") (rLinks ro)
+            , list ["uri", ".", encodeSexpStr $ uriToString id uri ""]]
   where
-    encodeStr s = concat ["\"", concatMap escape s, "\""]
-    escape '\\' = "\\\\"
-    escape '"' = "\\\""
-    escape '\n' = "\\n"
-    escape other = pure other
     showSexp :: Styled -> String
-    showSexp (Plain s) = encodeStr s
+    showSexp (Plain s) = encodeSexpStr s
     showSexp (Fg clr s) = list ["fg", show clr, showSexp s]
     showSexp (Bold s) = list ["style", "bold", showSexp s]
     showSexp (Underline s) = list ["style", "underline", showSexp s]
@@ -105,9 +110,9 @@ showSexps uri ro =
                                  , showDenotation d
                                  , showSexp s]
     showDenotation :: Denotation -> String
-    showDenotation (Link u) = list ["link", ".", encodeStr $ show u]
-    showDenotation (Image u) = list ["image", ".", encodeStr $ show u]
-    showDenotation (Math m) = list ["math", ".", encodeStr m]
+    showDenotation (Link u) = list ["link", ".", encodeSexpStr $ show u]
+    showDenotation (Image u) = list ["image", ".", encodeSexpStr $ show u]
+    showDenotation (Math m) = list ["math", ".", encodeSexpStr m]
     showDenotation (Heading l) = list ["heading", ".", show l]
 
 mergeStyled :: [Styled] -> [Styled]

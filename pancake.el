@@ -100,6 +100,12 @@
 
 (defcustom pancake-command '("pancake" "--embedded")
   "A command that runs pancake, along with its arguments"
+  :type '(list string)
+  :group 'pancake)
+
+(defcustom pancake-display-hook nil
+  "Hook run after displaying a page in pancake."
+  :type 'hook
   :group 'pancake)
 
 (defvar pancake-buffers '()
@@ -175,7 +181,8 @@
 
 (defun pancake-button-action (button)
   "An action to be invoked on button activation."
-  (funcall 'browse-url (button-get button 'pancake-uri)))
+  (funcall 'browse-url (or (button-get button 'pancake-link)
+                           (button-get button 'pancake-image))))
 
 (defun pancake-print-elem (element)
   "Translate ELEMENT into a string."
@@ -204,16 +211,14 @@
         (`(denotation (link . ,uri) . ,rest)
          (pancake-print-line rest)
          (make-text-button start (point)
-                           'pancake-uri uri
-                           'pancake-type 'link
+                           'pancake-link uri
                            'help-echo uri
                            'follow-link t
                            'action #'pancake-button-action))
         (`(denotation (image . ,uri) . ,rest)
          (pancake-print-line rest)
          (make-text-button start (point)
-                           'pancake-uri uri
-                           'pancake-type 'image
+                           'pancake-image uri
                            'help-echo uri
                            'follow-link t
                            'action #'pancake-button-action))
@@ -240,6 +245,42 @@ the list's `car' if it is already present."
                                         pancake-uri-history))
                   history-length)))
 
+(defun pancake-traverse-image-buttons (function)
+  "Traverse image buttons, applying FUNCTION to each. The
+function arguments must be a button and its pancake-image
+property. Returns a list of collected values."
+  (save-excursion
+    (goto-char (point-min))
+    (let ((inhibit-read-only t)
+          (ret nil)
+          (btn (next-button (point) t)))
+      (while btn
+        (let ((btn-image (button-get btn 'pancake-image)))
+          (goto-char btn)
+          (when btn-image
+            (push (apply function (list btn btn-image)) ret)))
+        (setq btn (next-button (point))))
+      (reverse ret))))
+
+(defun pancake-insert-image (uri path)
+  "Inserts a saved image."
+  (pancake-traverse-image-buttons
+   (lambda (btn btn-image)
+     (when (string-equal btn-image uri)
+       (let ((img (create-image path)))
+         ;; todo: might be better to slice images, but it seems to be
+         ;; a bit glitchy and breaks line numbering. Handling local
+         ;; references completely in emacs would help with the latter.
+         (insert-image img))))))
+
+(defun pancake-load-images ()
+  "Requests all the images to be loaded."
+  (interactive)
+  (mapc (lambda (uri) (pancake-process-send (concat "save " uri)))
+        (seq-uniq (pancake-traverse-image-buttons
+                   (lambda (btn btn-image) btn-image))
+                  'string-equal)))
+
 (defun pancake-process-filter (proc string)
   "Pancake process filter for stdout."
   (when (buffer-live-p (process-buffer proc))
@@ -261,8 +302,13 @@ the list's `car' if it is already present."
                    (dolist (line (alist-get 'lines alist))
                      (pancake-print-line line)
                      (newline))
-                   (goto-char (point-min))))
-                (`(goto ,line) (goto-line line))))))
+                   (goto-char (point-min)))
+                 (run-hooks 'pancake-display-hook))
+                (`(goto ,line) (goto-line line))
+                ;; todo: check if the images were requested
+                ;; explicitly, don't just show all the images that get
+                ;; saved
+                (`(saved ,uri ,path) (pancake-insert-image uri path))))))
         (setq pancake-process-output "")))))
 
 (defun pancake-process-stderr-filter (proc string)
@@ -410,6 +456,7 @@ it to `pancake-process' as input."
     (define-key map (kbd "F") 'pancake-go-forward)
     (define-key map (kbd "Q") 'pancake-quit)
     (define-key map (kbd "R") 'pancake-reload)
+    (define-key map (kbd "I") 'pancake-load-images)
     map)
   "Keymap for `pancake-mode'.")
 

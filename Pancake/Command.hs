@@ -109,20 +109,20 @@ pFilePath = do
 -- | 'Save' command parser for 'RURI'.
 save :: Parser Command
 save = Save
-       <$> (string "save" *> spaces *> (RURI <$> pURI))
-       <*> (spaces *> optionMaybe pFilePath)
+       <$> (string "save" *> space *> (RURI <$> pURI))
+       <*> optionMaybe (space *> pFilePath)
        <* eof
 
 -- | 'Save' command parser for 'RNumber'.
 saveRef :: String -> Parser Command
 saveRef digits = Save
-                 <$> (string "save" *> spaces *> (RNumber <$> pNumber digits))
-                 <*> (spaces *> optionMaybe pFilePath) <* eof
+                 <$> (string "save" *> space *> (RNumber <$> pNumber digits))
+                 <*> optionMaybe (space *> pFilePath) <* eof
 
 -- | 'Save' command parser for 'RCurrent'.
 saveCurrent :: Parser Command
-saveCurrent = Save RCurrent <$> (string "save" *> spaces *> char ','
-                                 *> spaces *> optionMaybe pFilePath <* eof)
+saveCurrent = Save RCurrent <$> (string "save" *> space *> char ','
+                                 *> optionMaybe (space *> pFilePath) <* eof)
 
 -- | 'GoTo' command parser for 'RURI'.
 goTo :: Parser Command
