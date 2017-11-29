@@ -406,7 +406,7 @@ renderBlock (P.RawBlock _ s) =
 renderBlock (P.BlockQuote bs) = withIndent $ renderBlocks bs
 renderBlock (P.OrderedList _ bs) = do
   zipWithM_ (\b n -> modify (\s -> s { listing = Just (Ordered n) })
-                     >> keepIndent (mapM_ renderBlock b)) bs [1..]
+                     >> keepIndent (renderBlocks b)) bs [1..]
   modify $ \s -> s { listing = Nothing }
 renderBlock (P.BulletList bs) = do
   mapM_ (\b -> modify (\s -> s { listing = Just Bulleted })
