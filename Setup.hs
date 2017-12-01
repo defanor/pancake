@@ -25,6 +25,7 @@ import System.Directory
 
 main = defaultMainWithHooks simpleUserHooks { postCopy = installManPage }
 
+-- | Installs pancake.1.
 installManPage :: Args
                -> CopyFlags
                -> PackageDescription

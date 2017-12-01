@@ -115,6 +115,7 @@ showSexps uri ro =
     showDenotation (Math m) = list ["math", ".", encodeSexpStr m]
     showDenotation (Heading l) = list ["heading", ".", show l]
 
+-- | Merge elements with the same styling.
 mergeStyled :: [Styled] -> [Styled]
 mergeStyled = foldr mergeStyled' []
   where
@@ -122,6 +123,8 @@ mergeStyled = foldr mergeStyled' []
     mergeStyled' s [] = [s]
     mergeStyled' s (s':rest) = maybe (s:s':rest) (: rest) (tryMerge s s')
 
+-- | Merge two elements if their styles are the same. Used by
+-- 'mergeStyled'.
 tryMerge :: Styled -> Styled -> Maybe Styled
 tryMerge (Plain s) (Plain s') = pure $ Plain $ s ++ s'
 tryMerge (Fg clr s) (Fg clr' s')
