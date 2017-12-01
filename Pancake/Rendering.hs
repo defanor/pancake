@@ -484,9 +484,36 @@ renderBlock (P.Div attr b) = do
   i $ renderBlocks b
 renderBlock P.Null = pure ()
 
--- | Renders block elements with empy lines between them.
+-- | Checks whether a block is a list (ordered-, bullet-, or
+-- definition-).
+isList :: P.Block -> Bool
+isList P.OrderedList {} = True
+isList P.BulletList {} = True
+isList P.DefinitionList {} = True
+isList _ = False
+
+-- | Determines whether a line should be skipped before a block.
+skipBefore :: P.Block -> Bool
+skipBefore P.Header {} = True
+skipBefore P.Para {} = True
+skipBefore (P.Div _ (b:_)) = skipBefore b
+skipBefore _ = False
+
+-- | Determines whether a line should be skipped after a block.
+skipAfter :: P.Block -> Bool
+skipAfter P.Header {} = True
+skipAfter P.Para {} = True
+skipAfter (P.Div _ bs@(_:_)) = skipAfter $ last bs
+skipAfter b = isList b
+
+-- | Renders block elements with empty lines between some of them.
 renderBlocks :: [P.Block] -> Renderer ()
-renderBlocks b = sequence_ (intersperse (storeLines [[]]) $ map renderBlock b)
+renderBlocks [] = pure ()
+renderBlocks [b] = renderBlock b
+renderBlocks (b1:bs@(b2:_)) = do
+  renderBlock b1
+  when (skipAfter b1 || skipBefore b2) $ storeLines [[]]
+  renderBlocks bs
 
 -- | Renders a document.
 renderDoc :: Int
