@@ -438,7 +438,8 @@ renderBlock (P.Table caption aligns widths headers rows) = do
       (mapM (fmap (length . unstyled . concat . rLines) . renderCell 80)) rows
     pure $ map (\l -> fromIntegral l / fromIntegral (sum lens) * 0.7
                       + 1 / fromIntegral (length lens) * 0.3) lens
-  mapM_ (\r -> renderBlock P.HorizontalRule >> tableRow ws r) (headers : rows)
+  let withHead = if all null headers then id else (headers :)
+  mapM_ (\r -> renderBlock P.HorizontalRule >> tableRow ws r) (withHead rows)
   renderBlock P.HorizontalRule
   where
     renderCell :: Int -> [P.Block] -> Renderer [RendererOutput]
