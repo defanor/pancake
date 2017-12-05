@@ -168,9 +168,12 @@
 `browse-url-browser-function'."
   (when (or new-session (not (consp pancake-buffers)))
     (pancake))
-  (with-current-buffer (car pancake-buffers)
-    (process-send-string pancake-process (concat url "\n"))
-    (display-buffer (current-buffer))))
+  (let ((buffer (if (eq major-mode 'pancake-mode)
+                    (current-buffer)
+                  (car pancake-buffers))))
+    (with-current-buffer buffer
+      (process-send-string pancake-process (concat url "\n"))
+      (display-buffer (current-buffer)))))
 
 (defun pancake-translate-color (name attr)
   "Translate pancake colors into emacs faces."
