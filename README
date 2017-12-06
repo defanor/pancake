@@ -82,7 +82,8 @@ Configuration
 -------------
 
 Default configuration will be written into XDG configuration
-directory, and would look approximately like this::
+directory, and would look approximately like this (slightly
+simplified)::
 
   externalViewers:
     png: xdg-open "${FILE}"
@@ -91,7 +92,7 @@ directory, and would look approximately like this::
   commands:
     gopher: torify curl "${URI}"
     ssh: scp "${URI_REGNAME}:${URI_PATH}" /dev/stdout
-  defaultCommand: ! 'curl --compressed -4 -L "${URI}" -w "
+  defaultCommand: ! 'curl --compressed -4 -L -w "
 
     -pancake-
 
@@ -99,12 +100,13 @@ directory, and would look approximately like this::
 
     type: %{content_type}
 
-    "'
+    " "${URI}"'
   referenceDigits: 'rstwfpxcvaqzdgb'
   shortcuts:
     g: https://m.gutenberg.org/ebooks/search.mobile/?query=
     ddg: https://duckduckgo.com/lite/?q=
     wt: https://en.m.wiktionary.org/w/index.php?search=
+    wa: web-archive:///?url=
     wp: https://en.m.wikipedia.org/wiki/Special:Search?search=
     gp: gopher://gopherpedia.com:70/7/lookup?
     vs: gopher://gopher.floodgap.com/7/v2/vs?

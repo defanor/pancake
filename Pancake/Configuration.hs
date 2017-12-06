@@ -82,9 +82,12 @@ instance Default Config where
       [ ("ssh", "scp \"${URI_REGNAME}:${URI_PATH}\" /dev/stdout"
                 ++ " && echo -e '\n-pancake-'")
       , ("gopher", "curl \"${URI}\""
-          ++ " -w \"\n-pancake-\n\"")]
-    , defaultCommand = "curl --compressed -4 -L \"${URI}\""
-      ++ " -w \"\n-pancake-\nuri: %{url_effective}\ntype: %{content_type}\n\""
+          ++ " -w \"\n-pancake-\n\"")
+      , ("web-archive", concat
+          [ curl
+          , "\"$(curl \"https://archive.org/wayback/available${URI_QUERY}"
+          , "\" | jq -r '.archived_snapshots.closest.url')\"" ])]
+    , defaultCommand = curl ++ "\"${URI}\""
     , externalViewers = M.fromList $
       map (flip (,) "emacsclient -n \"${FILE}\"")
       ["hs", "cabal", "c", "h", "el", "scm", "idr"]
@@ -98,12 +101,17 @@ instance Default Config where
       , ("g", "https://m.gutenberg.org/ebooks/search.mobile/?query=")
       , ("xiph", "http://dir.xiph.org/search?search=")
       , ("gp", "gopher://gopherpedia.com:70/7/lookup?")
-      , ("vs", "gopher://gopher.floodgap.com/7/v2/vs?")]
+      , ("vs", "gopher://gopher.floodgap.com/7/v2/vs?")
+      , ("wa", "web-archive:///?url=")]
     , paginate = True
     , historyDepth = 100
     , referenceDigits = "0123456789"
     , indentDivs = False
     }
+    where
+      curl = concat
+        [ "curl --compressed -4 -L "
+        , "-w \"\n-pancake-\nuri: %{url_effective}\ntype: %{content_type}\n\" "]
 
 -- | Loads configuration from an XDG config directory.
 loadConfig :: MonadIO m => m Config

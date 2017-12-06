@@ -93,7 +93,9 @@ retrieve cmd uri = do
                                      , ("URI_REGNAME", uriRegName x)
                                      , ("URI_PORT", uriPort x) ])
         (uriAuthority uri)
-      environment = ("URI", uriToString id uri "")
+      uriStr = uriToString id uri ""
+      environment = ("URI", uriStr)
+                    : ("URI_ESCAPED", escapeURIString isUnreserved uriStr)
                     : ("URI_SCHEME", uriScheme uri)
                     : ("URI_PATH", uriPath uri)
                     : ("URI_QUERY", uriQuery uri)
