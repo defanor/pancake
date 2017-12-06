@@ -83,7 +83,7 @@ instance Default Config where
                 ++ " && echo -e '\n-pancake-'")
       , ("gopher", "curl \"${URI}\""
           ++ " -w \"\n-pancake-\n\"")]
-    , defaultCommand = "curl -4 -L \"${URI}\""
+    , defaultCommand = "curl --compressed -4 -L \"${URI}\""
       ++ " -w \"\n-pancake-\nuri: %{url_effective}\ntype: %{content_type}\n\""
     , externalViewers = M.fromList $
       map (flip (,) "emacsclient -n \"${FILE}\"")

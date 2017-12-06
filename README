@@ -91,7 +91,7 @@ directory, and would look approximately like this::
   commands:
     gopher: torify curl "${URI}"
     ssh: scp "${URI_REGNAME}:${URI_PATH}" /dev/stdout
-  defaultCommand: ! 'curl -4 -L "${URI}" -w "
+  defaultCommand: ! 'curl --compressed -4 -L "${URI}" -w "
 
     -pancake-
 
