@@ -6,6 +6,16 @@ pancake - a CLI/Emacs web/gopher/file browser
 .SH SYNOPSIS
 pancake [\fIoption ...\fR]
 
+.SH DESCRIPTION
+Pancake utilizes pandoc and external downloaders such as curl, adding
+support for Gopher directories and plain text files, and invoking
+external applications (e.g., image and PDF viewers) depending on its
+configuration.
+
+User interaction capabilities are rather basic, as it is intended to
+be combined with software that provides better user interfaces -- such
+as emacs, rlwrap, tmux, screen.
+
 .SH OPTIONS
 .IP "\fB\-\-version\fR"
 Print version and exit.
@@ -13,6 +23,58 @@ Print version and exit.
 Print a help message.
 .IP "\fB\-\-embedded\fR"
 Run in the embedded mode.
+
+.SH COMMANDS
+.IP "\fBquit\fR or EOF"
+quit pancake, cleaning the cache
+.IP "\fB[\fR"
+back
+.IP "\fB]\fR"
+forward
+.IP "\fBreload config\fR"
+reload config
+.IP "\fBhelp\fR"
+show a help message
+.IP "\fB?\fR"
+show current URI
+.IP "RET (empty)"
+show the next 2/3 of a page, if pagination is enabled
+.IP "\fIURI\fR"
+follow an URI, possibly relative to the current one
+.IP "\fItype\fR \fIURI\fR"
+same as above, but explicitly set a document type (html, txt, org,
+markdown, etc)
+.IP "[\fB,\fR]\fInumber\fR"
+follow a link
+.IP "\fB,\fR"
+reload current document
+.IP "\fBsave\fR \fIURI\fR[ \fIpath\fR]"
+retrieve data and save it
+.IP "\fBsave\fR [\fB,\fR]\fInumber\fR[ \fIpath\fR]"
+save linked data
+.IP "\fBsave\fR \fB,\fR[ \fIpath\fR]"
+save current document
+.IP "\fIshortcut\fR \fIquery\fR"
+run a query using a shortcut defined in the configuration (e.g.,
+search)
+
+.SH DEFAULT SHORTCUTS
+.IP "\fBg\fR"
+gutenberg.org
+.IP "\fBddg\fR"
+duckduckgo.com
+.IP "\fBwt\fR"
+wiktionary.org
+.IP "\fBwp\fR"
+wikipedia.org
+.IP "\fBwa\fR"
+web.archive.org
+.IP "\fBxiph\fR"
+xiph.org
+.IP "\fBgp\fR"
+gopherpedia.com
+.IP "\fBvs\fR"
+gopher.floodgap.com
 
 .SH SIGNALS
 .IP "\fBSIGINT\fR"
