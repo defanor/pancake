@@ -48,10 +48,12 @@ import GHC.IO.Handle
 import Text.Parsec hiding ((<|>))
 import Text.Parsec.ByteString
 import Data.Maybe
+import Data.Version
 
 import Text.Pandoc.Readers.Plain
 import Text.Pandoc.Readers.Gopher
 import Pancake.Common
+import Paths_pancake
 
 
 -- | Metadata (header, URI, document type) parser.
@@ -100,6 +102,7 @@ retrieve cmd uri = do
                     : ("URI_PATH", uriPath uri)
                     : ("URI_QUERY", uriQuery uri)
                     : ("URI_FRAGMENT", uriFragment uri)
+                    : ("PANCAKE", showVersion version)
                     : curEnv
                     ++ envAuthority
   handle (\(e :: SomeException) ->
