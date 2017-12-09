@@ -1,5 +1,12 @@
 # Revision history for pancake
 
+## 0.1.7 -- 2017-12-09
+
+* 'b' and 'f' commands are replaced with '[' and ']'.
+* The man page is elaborated.
+* Other minor adjustments, improvements, and bugfixes.
+
+
 ## 0.1.6 -- 2017-11-28
 
 * New features:
