@@ -109,9 +109,8 @@ instance Default Config where
     , indentDivs = False
     }
     where
-      curl = concat
-        [ "curl --compressed -4 -L "
-        , "-w \"\n-pancake-\nuri: %{url_effective}\ntype: %{content_type}\n\" "]
+      curl = "curl --compressed -4 -L " ++
+        "-w \"\n-pancake-\nuri: %{url_effective}\ntype: %{content_type}\n\" "
 
 -- | Loads configuration from an XDG config directory.
 loadConfig :: MonadIO m => m Config
