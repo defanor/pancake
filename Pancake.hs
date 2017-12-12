@@ -354,4 +354,6 @@ main = do
     ([], [], []) -> run False
     ([OEmbedded], [], []) -> run True
     ([OVersion], [], []) -> putStrLn $ "pancake " ++ showVersion version
-    _ -> putStrLn $ usageInfo "Usage: pancake [option ...]" options
+    _ -> do
+      p <- getProgName
+      putStrLn $ usageInfo ("Usage: " ++ p ++ " [option ...]") options
