@@ -41,10 +41,11 @@ import Data.List
 import Text.Regex.TDFA.String
 import Text.Regex.Base.RegexLike
 import Text.XML.HXT.Core ( writeDocumentToString, readString
-                         , withParseHTML, runX, (>>>), yes)
+                         , withParseHTML, withWarnings, runX, (>>>), yes, no)
 import Text.XML.HXT.XSLT (xsltApplyStylesheetFromURI)
 import Data.Text.Encoding (decodeUtf8', decodeLatin1, encodeUtf8)
 import qualified Data.Text as T
+import Control.Exception
 
 
 import Pancake.Common
@@ -59,19 +60,19 @@ tryUnclutter :: MonadIO m
              -> BS.ByteString
              -- ^ Raw document.
              -> m BS.ByteString
-tryUnclutter rs u d = do
+tryUnclutter rs u d = liftIO $ handle err $ do
   let matches (r, _) = case execute r uStr of
         Right (Just _) -> True
         _ -> False
   case find matches rs of
-    Just (_, fn) -> liftIO $ do
+    Just (_, fn) -> do
       dir <- getXdgDirectory XdgConfig "pancake"
       let src = dir </> "unclutter" </> fn <.> "xsl"
       exists <- doesFileExist src
       if exists
         then do
         let txt = T.unpack $ either (const $ decodeLatin1 d) id $ decodeUtf8' d
-            doc = readString [withParseHTML yes] txt
+            doc = readString [withParseHTML yes, withWarnings no] txt
         rc <- runX $ doc
               >>> xsltApplyStylesheetFromURI src
               >>> writeDocumentToString []
@@ -80,7 +81,10 @@ tryUnclutter rs u d = do
           _ -> d
         else pure d
     Nothing -> pure d
-  where uStr = uriToString id u ""
+  where
+    uStr = uriToString id u ""
+    err :: SomeException -> IO BS.ByteString
+    err e = putErrLn (show e) >> pure d
 
 -- | Compiles regexps for uncluttering.
 prepareUnclutter :: MonadIO m => Config -> m [(Regex, String)]
