@@ -40,8 +40,8 @@ import System.FilePath
 import Data.List
 import Text.Regex.TDFA.String
 import Text.Regex.Base.RegexLike
-import Text.XML.HXT.Core (readString, withParseHTML, runX, XmlTree, (>>>), yes)
-import Text.XML.HXT.DOM.ShowXml (xshow)
+import Text.XML.HXT.Core ( writeDocumentToString, readString
+                         , withParseHTML, runX, (>>>), yes)
 import Text.XML.HXT.XSLT (xsltApplyStylesheetFromURI)
 import Data.Text.Encoding (decodeUtf8', decodeLatin1, encodeUtf8)
 import qualified Data.Text as T
@@ -72,10 +72,12 @@ tryUnclutter rs u d = do
         then do
         let txt = T.unpack $ either (const $ decodeLatin1 d) id $ decodeUtf8' d
             doc = readString [withParseHTML yes] txt
-        rc <- runX (doc >>> xsltApplyStylesheetFromURI src) :: IO [XmlTree]
+        rc <- runX $ doc
+              >>> xsltApplyStylesheetFromURI src
+              >>> writeDocumentToString []
         pure $ case rc of
-          [] -> d
-          _ -> encodeUtf8 $ T.pack $ xshow rc
+          [str] -> encodeUtf8 $ T.pack str
+          _ -> d
         else pure d
     Nothing -> pure d
   where uStr = uriToString id u ""
