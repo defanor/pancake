@@ -67,6 +67,8 @@ data Config = Config { commands :: M.Map String String
                      , indentDivs :: Bool
                      -- ^ Whether to add indentation for elements
                      -- inside divs.
+                     , unclutter :: M.Map String String
+                     -- ^ XSLT file and URI regex.
                      } deriving (Generic, Show, Eq)
 
 -- | For configuration parsing.
@@ -107,6 +109,7 @@ instance Default Config where
     , historyDepth = 100
     , referenceDigits = "0123456789"
     , indentDivs = False
+    , unclutter = M.empty
     }
     where
       curl = "curl --compressed -4 -L " ++

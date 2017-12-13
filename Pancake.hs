@@ -52,6 +52,7 @@ import Data.Version
 import System.Console.GetOpt
 import System.Posix.Signals
 import Control.Concurrent
+import Text.Regex.TDFA
 
 import Pancake.Common
 import Pancake.Configuration
@@ -59,6 +60,7 @@ import Pancake.Command
 import Pancake.Reading
 import Pancake.Rendering
 import Pancake.Printing
+import Pancake.Unclutter
 import Paths_pancake
 
 -- | A zipper kind of thing, for scrolling and history traversal.
@@ -71,7 +73,8 @@ data LoopState = LS { history :: Sliding (URI, P.Pandoc)
                     , conf :: Config
                     , embedded :: Bool
                     , interrupted :: Bool
-                    } deriving (Show)
+                    , unclutterRegexps :: [(Regex, String)]
+                    }
 
 -- | Renders a parsed document.
 printDoc :: MonadIO m => URI -> P.Pandoc -> StateT LoopState m ()
@@ -95,7 +98,8 @@ printDoc uri doc = do
 updateConfig :: MonadIO m => StateT LoopState m ()
 updateConfig = do
   c <- loadConfig
-  modify $ \s -> s { conf = c }
+  u <- prepareUnclutter c
+  modify $ \s -> s { conf = c, unclutterRegexps = u }
 
 -- | A wrapper around 'retrieve' that adjusts the URI.
 loadRaw :: MonadIO m => URI ->
@@ -140,7 +144,8 @@ loadDocument sType rawURI = do
             (_, other) -> other
       case M.lookup ext (externalViewers $ conf st) of
         Nothing -> do
-          doc <- readDoc rawDoc fType effectiveURI
+          uDoc <- tryUnclutter (unclutterRegexps st) effectiveURI rawDoc
+          doc <- readDoc uDoc fType effectiveURI
           case doc of
             Left err -> do
               putErrLn $ show err
@@ -348,7 +353,7 @@ main = do
   tid <- myThreadId
   _ <- installHandler sigINT (Catch (throwTo tid UserInterrupt)) Nothing
   let run e = runStateT (updateConfig >> eventLoop)
-              (LS ([],[]) 0 [] def e False)
+              (LS ([],[]) 0 [] def e False [])
               >> pure ()
   case getOpt Permute options args of
     ([], [], []) -> run False

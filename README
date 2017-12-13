@@ -92,6 +92,8 @@ simplified)::
   commands:
     gopher: torify curl "${URI}"
     ssh: scp "${URI_REGNAME}:${URI_PATH}" /dev/stdout
+  unclutter:
+    duckduckgo: ^https://duckduckgo\.com/lite/\?q=
   defaultCommand: ! 'curl --compressed -4 -L -w "
 
     -pancake-
@@ -113,6 +115,40 @@ simplified)::
     xiph: http://dir.xiph.org/search?search=
   historyDepth: 100
   paginate: true
+
+
+Uncluttering
+~~~~~~~~~~~~
+
+XSLT can be used to extract useful data from HTML documents. In the
+above sample configuration, ``duckduckgo`` is defined along with an
+URI regex to determine when it should be applied, and the
+corresponding XSLT file should be in
+``~/.config/pancake/unclutter/duckduckgo.xsl``::
+
+  <?xml version="1.0" encoding="UTF-8"?>
+  <xsl:stylesheet xmlns:xsl="http://www.w3.org/1999/XSL/Transform" version="1.0">
+    <xsl:output method="xml" indent="yes"/>
+    <xsl:template match="/">
+      <html>
+        <body>
+          <xsl:for-each select="//tr[not(@class) or @class!='result-sponsored']">
+            <xsl:for-each select="td/a[@class='result-link']">
+              <br />
+              <br />
+              <a href="{@href}">
+                <xsl:value-of select="." />
+              </a>
+            </xsl:for-each>
+            <xsl:for-each select="td[@class='result-snippet']">
+              <br />
+              <xsl:value-of select="." />
+            </xsl:for-each>
+          </xsl:for-each>
+        </body>
+      </html>
+    </xsl:template>
+  </xsl:stylesheet>
 
 
 Screenshots
