@@ -128,10 +128,11 @@ corresponding XSLT file should be in
 
   <?xml version="1.0" encoding="UTF-8"?>
   <xsl:stylesheet xmlns:xsl="http://www.w3.org/1999/XSL/Transform" version="1.0">
-    <xsl:output method="xml" indent="yes"/>
+    <xsl:output method="html" indent="yes"/>
     <xsl:template match="/">
       <html>
         <body>
+          DuckDuckGo
           <xsl:for-each select="//tr[not(@class) or @class!='result-sponsored']">
             <xsl:for-each select="td/a[@class='result-link']">
               <br />
@@ -150,6 +151,8 @@ corresponding XSLT file should be in
     </xsl:template>
   </xsl:stylesheet>
 
+Uncluttering configurations for a few more websites can be found at
+<https://github.com/defanor/dotfiles/tree/master/.config/pancake>.
 
 Screenshots
 -----------
