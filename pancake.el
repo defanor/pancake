@@ -174,8 +174,7 @@ if no URL is provided."
                     (current-buffer)
                   (car pancake-buffers))))
     (with-current-buffer buffer
-      (when url
-        (process-send-string pancake-process (concat url "\n")))
+      (when url (pancake-process-send url))
       (display-buffer (current-buffer)))))
 
 (defun pancake-translate-color (name attr)
@@ -356,8 +355,18 @@ property. Returns a list of collected values."
   (interactive)
   (funcall (pancake-input (gui-get-primary-selection))))
 
+(defun pancake-width-adjust (&optional width)
+  "Sets the width (in columns) that the pancake process should
+use. Current window width is used if none is provided."
+  (interactive)
+  ;; Not using `pancake-process-send' here, since it itself would call
+  ;; this function.
+  (process-send-string pancake-process
+                       (format "set width %d\n" (or width (window-width)))))
+
 (defun pancake-process-send (line)
   "Send LINE to the pancake process."
+  (pancake-width-adjust)
   (process-send-string pancake-process (concat line "\n")))
 
 (defun pancake-go-backward ()

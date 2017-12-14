@@ -74,6 +74,7 @@ data LoopState = LS { history :: Sliding (URI, P.Pandoc)
                     , embedded :: Bool
                     , interrupted :: Bool
                     , unclutterRegexps :: [(Regex, String)]
+                    , columns :: Maybe Int
                     }
 
 -- | Renders a parsed document.
@@ -81,7 +82,7 @@ printDoc :: MonadIO m => URI -> P.Pandoc -> StateT LoopState m ()
 printDoc uri doc = do
   term <- liftIO setupTermFromEnv
   st <- get
-  let cols = fromMaybe 80 $ getCapability term termColumns
+  let cols = fromMaybe 80 $ columns st <|> getCapability term termColumns
       l = renderDoc cols (conf st) doc
       textLines = rLines l
   modify (\s -> s { rendered = l })
@@ -315,6 +316,7 @@ command Quit = liftIO $ do
   when exists $ removeDirectoryRecursive dir
 command Interrupt =
   putErrLn "Received SIGINT. Interrupt twice in a row to quit."
+command (SetWidth w) = modify $ \s -> s { columns = w }
 
 -- | Reads commands, runs them.
 eventLoop :: MonadIO m => StateT LoopState m ()
@@ -353,7 +355,7 @@ main = do
   tid <- myThreadId
   _ <- installHandler sigINT (Catch (throwTo tid UserInterrupt)) Nothing
   let run e = runStateT (updateConfig >> eventLoop)
-              (LS ([],[]) 0 [] def e False [])
+              (LS ([],[]) 0 [] def e False [] Nothing)
               >> pure ()
   case getOpt Permute options args of
     ([], [], []) -> run False

@@ -60,6 +60,7 @@ data Command = Quit
              | ShowCurrent
              | Shortcut String String
              | ReloadConfig
+             | SetWidth (Maybe Int)
              deriving (Show, Eq)
 
 -- | Parses a user command.
@@ -141,6 +142,16 @@ shortcut m = do
       q <- manyTill anyChar eof
       pure $ Shortcut u q
 
+-- | A natural numbers parser.
+pNat :: Read i => Parser i
+pNat = read <$> many1 digit
+
+-- | 'SetWidth' command parser.
+setWidth :: Parser Command
+setWidth = string "set width"
+           *> (SetWidth <$> optionMaybe (spaces *> pNat))
+           <* eof
+
 -- | Command parser.
 command :: Config -> Parser Command
 command c =
@@ -152,5 +163,6 @@ command c =
           , saveRef (referenceDigits c) <?> "save ref"
           , saveCurrent <?> "save current"
           , save <?> "save"
+          , setWidth <?> "set width"
           , goTo <?> "follow uri"
           ])
