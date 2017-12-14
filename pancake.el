@@ -110,7 +110,7 @@
 
 (defvar pancake-buffers '()
   "A list of pancake browser buffers, used to find a buffer to
-  use by `pancake-browse-url'.")
+  use by the `pancake' command.")
 
 (defvar pancake-headings '()
   "A list of headings with their levels.")
@@ -133,8 +133,8 @@
 (make-variable-buffer-local 'pancake-uri-history)
 
 ;;###autoload
-(defun pancake ()
-  "Run the pancake browser."
+(defun pancake-new ()
+  "Run a new pancake session."
   (interactive)
   (let ((p-buf (generate-new-buffer "*pancake*")))
     (display-buffer p-buf)
@@ -163,16 +163,19 @@
       (read-only-mode 1))))
 
 ;;###autoload
-(defun pancake-browse-url (url &optional new-session)
+(defun pancake (&optional url new-session)
   "Browse an URL with pancake, suitable for setting as
-`browse-url-browser-function'."
+`browse-url-browser-function'. Or simply display a pancake buffer
+if no URL is provided."
+  (interactive)
   (when (or new-session (not (consp pancake-buffers)))
-    (pancake))
+    (pancake-new))
   (let ((buffer (if (eq major-mode 'pancake-mode)
                     (current-buffer)
                   (car pancake-buffers))))
     (with-current-buffer buffer
-      (process-send-string pancake-process (concat url "\n"))
+      (when url
+        (process-send-string pancake-process (concat url "\n")))
       (display-buffer (current-buffer)))))
 
 (defun pancake-translate-color (name attr)

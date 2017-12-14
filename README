@@ -43,7 +43,7 @@ Emacs interface
 your default emacs browser::
 
   (require 'pancake)
-  (setq browse-url-browser-function 'pancake-browse-url)
+  (setq browse-url-browser-function 'pancake)
 
 To load and show all images automatically (not just after saving them
 manually)::
