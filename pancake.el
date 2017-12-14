@@ -32,6 +32,9 @@
 
 (require 'seq)
 
+
+;;;; Settings
+
 (defgroup pancake nil
   "Pancake browser interface."
   :prefix "pancake-"
@@ -132,7 +135,10 @@
   "History of visited URIs, limited by `history-length'.")
 (make-variable-buffer-local 'pancake-uri-history)
 
-;;###autoload
+
+;;;; Functions
+
+;;;###autoload
 (defun pancake-new ()
   "Run a new pancake session."
   (interactive)
@@ -162,7 +168,7 @@
       (push p-buf pancake-buffers)
       (read-only-mode 1))))
 
-;;###autoload
+;;;###autoload
 (defun pancake (&optional url new-session)
   "Browse an URL with pancake, suitable for setting as
 `browse-url-browser-function'. Or simply display a pancake buffer
@@ -176,6 +182,13 @@ if no URL is provided."
     (with-current-buffer buffer
       (when url (pancake-process-send url))
       (display-buffer (current-buffer)))))
+
+(defun pancake-goto-line (&optional line)
+  "Go to LINE. This is mostly to avoid `goto-line' warnings,
+while avoiding code duplication."
+  (when line
+    (goto-char (point-min))
+    (forward-line (1- line))))
 
 (defun pancake-translate-color (name attr)
   "Translate pancake colors into emacs faces."
@@ -211,7 +224,7 @@ if no URL is provided."
         (`(superscript . ,rest)
          (pancake-print-line rest)
          (add-text-properties start (point) '(display (raise 0.2))))
-        (`(denotation (math . ,formula) . ,rest)
+        (`(denotation (math . ,_formula) . ,rest)
          (pancake-print-line rest))
         (`(denotation (link . ,uri) . ,rest)
          (pancake-print-line rest)
@@ -270,7 +283,7 @@ property. Returns a list of collected values."
 (defun pancake-insert-image (uri path)
   "Inserts a saved image."
   (pancake-traverse-image-buttons
-   (lambda (btn btn-image)
+   (lambda (_btn btn-image)
      (when (string-equal btn-image uri)
        (let ((img (create-image path)))
          ;; todo: might be better to slice images, but it seems to be
@@ -283,7 +296,7 @@ property. Returns a list of collected values."
   (interactive)
   (mapc (lambda (uri) (pancake-process-send (concat "save " uri)))
         (seq-uniq (pancake-traverse-image-buttons
-                   (lambda (btn btn-image) btn-image))
+                   (lambda (_btn btn-image) btn-image))
                   'string-equal)))
 
 (defun pancake-process-filter (proc string)
@@ -311,13 +324,13 @@ property. Returns a list of collected values."
                        (newline))
                      (goto-char (point-min)))
                    (run-hooks 'pancake-display-hook))
-                  (`(goto ,line) (goto-line line))
+                  (`(goto ,line) (pancake-goto-line line))
                   ;; todo: check if the images were requested
                   ;; explicitly, don't just show all the images that get
                   ;; saved
                   (`(saved ,uri ,path) (pancake-insert-image uri path)))))))))))
 
-(defun pancake-process-stderr-filter (proc string)
+(defun pancake-process-stderr-filter (_proc string)
   "Pancake process filter for stderr."
   (setq pancake-process-stderr-output
         (concat pancake-process-stderr-output string))
@@ -325,7 +338,7 @@ property. Returns a list of collected values."
     (message "pancake: %s" (string-trim pancake-process-stderr-output))
     (setq pancake-process-stderr-output "")))
 
-(defun pancake-process-sentinel (process event)
+(defun pancake-process-sentinel (process _event)
   "Pancake process sentinel for stdout."
   (let ((buf (process-buffer process)))
     (when (and (not (process-live-p process))
@@ -334,7 +347,7 @@ property. Returns a list of collected values."
     (setq pancake-buffers
           (seq-remove (lambda (x) (eq x buf)) pancake-buffers))))
 
-(defun pancake-process-stderr-sentinel (process event)
+(defun pancake-process-stderr-sentinel (process _event)
   "Pancake process sentinel for stderr."
   (when (and (not (process-live-p process))
              (buffer-live-p (process-buffer process)))
@@ -416,7 +429,7 @@ use. Current window width is used if none is provided."
   (let ((line (seq-find (lambda (x) (< x (line-number-at-pos)))
                         (mapcar 'car pancake-headings))))
     (when line
-      (goto-line line))))
+      (pancake-goto-line line))))
 
 (defun pancake-next-heading ()
   "Moves cursor to the next heading."
@@ -424,7 +437,7 @@ use. Current window width is used if none is provided."
   (let ((line (seq-find (lambda (x) (> x (line-number-at-pos)))
                         (reverse (mapcar 'car pancake-headings)))))
     (when line
-      (goto-line line))))
+      (pancake-goto-line line))))
 
 (defun pancake-minibuffer-setup ()
   "Removes itself from `minibuffer-setup-hook' and unsets SPC in
