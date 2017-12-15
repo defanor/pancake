@@ -375,7 +375,8 @@ use. Current window width is used if none is provided."
   ;; Not using `pancake-process-send' here, since it itself would call
   ;; this function.
   (process-send-string pancake-process
-                       (format "set width %d\n" (or width (window-width)))))
+                       (format "set width %d\n"
+                               (or width (1- (window-width))))))
 
 (defun pancake-process-send (line)
   "Send LINE to the pancake process."
