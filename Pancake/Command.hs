@@ -61,6 +61,7 @@ data Command = Quit
              | Shortcut String String
              | ReloadConfig
              | SetWidth (Maybe Int)
+             | Redisplay
              deriving (Show, Eq)
 
 -- | Parses a user command.
@@ -77,6 +78,7 @@ basicCommand = choice . map (\(s, c) -> try (string s <* eof) *> pure c) $
   , ("reload config", ReloadConfig)
   , ("help", Help)
   , ("?", ShowCurrent)
+  , ("redisplay", Redisplay)
   , ("", More)]
 
 -- | Link number parser.

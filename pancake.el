@@ -403,6 +403,11 @@ use. Current window width is used if none is provided."
   (interactive)
   (pancake-process-send ","))
 
+(defun pancake-redisplay ()
+  "Redisplay the current document."
+  (interactive)
+  (pancake-process-send "redisplay"))
+
 (defun pancake-display-current-uri ()
   "Display current URI and put it into the kill ring."
   (interactive)

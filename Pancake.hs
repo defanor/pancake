@@ -317,6 +317,12 @@ command Quit = liftIO $ do
 command Interrupt =
   putErrLn "Received SIGINT. Interrupt twice in a row to quit."
 command (SetWidth w) = modify $ \s -> s { columns = w }
+command Redisplay = do
+  st <- get
+  case history st of
+    ((uri, doc):_, _) -> printDoc uri doc
+    _ -> putErrLn "There's nothing to redisplay"
+
 
 -- | Reads commands, runs them.
 eventLoop :: MonadIO m => StateT LoopState m ()

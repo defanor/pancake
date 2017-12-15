@@ -74,6 +74,7 @@ Commands
 :<shortcut> <query>: run a query using a shortcut defined in the
                      configuration (e.g., search)
 :set width[ <columns>]: set terminal/window width manually
+:redisplay: redisplay current document
 
 pancake-mode provides additional aliases and commands, see built-in
 emacs documentation (``C-h m``) for those.
