@@ -348,7 +348,8 @@ data Option = OVersion | OHelp | OEmbedded deriving (Show)
 
 -- | Command-line option descriptions for 'getOpt'.
 options :: [OptDescr Option]
-options = [ Option [] ["version"] (NoArg OVersion) "show version number and exit"
+options = [ Option [] ["version"] (NoArg OVersion)
+            "show version number and exit"
           , Option [] ["help"] (NoArg OHelp) "show help message and exit"
           , Option ['e'] ["embedded"] (NoArg OEmbedded)
             "run in the embedded mode" ]
@@ -360,13 +361,22 @@ main = do
   -- A hack to receive SIGINT reliably.
   tid <- myThreadId
   _ <- installHandler sigINT (Catch (throwTo tid UserInterrupt)) Nothing
-  let run e = runStateT (updateConfig >> eventLoop)
-              (LS ([],[]) 0 [] def e False [] Nothing)
-              >> pure ()
-  case getOpt Permute options args of
-    ([], [], []) -> run False
-    ([OEmbedded], [], []) -> run True
-    ([OVersion], [], []) -> putStrLn $ "pancake " ++ showVersion version
+  let run cmd e = do
+        let maybeCommand =
+              if null cmd
+              then pure ()
+              else get >>= \st -> command (parseCommand (conf st) (unwords cmd))
+        _ <- runStateT (updateConfig >> maybeCommand >> eventLoop)
+             (LS ([],[]) 0 [] def e False [] Nothing)
+        pure ()
+  let opt = getOpt Permute options args
+  case opt of
+    (_, _, errors) -> mapM_ putErrLn errors
+  case opt of
+    ([], cmd, _) -> run cmd False
+    ([OEmbedded], cmd, _) -> run cmd True
+    ([OVersion], [], _) -> putStrLn $ "pancake " ++ showVersion version
     _ -> do
       p <- getProgName
-      putStrLn $ usageInfo ("Usage: " ++ p ++ " [option ...]") options
+      putStrLn $
+        usageInfo ("Usage: " ++ p ++ " [option ...] [command ...]") options
