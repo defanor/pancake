@@ -59,7 +59,8 @@ Commands
 :quit or EOF: quit pancake, cleaning the cache
 :[: back
 :]: forward
-:reload config: reload config
+:load config[ <path>]: load configuration from a specified file or
+                       reload it from the default one
 :help: show a help message
 :?: show current URI
 :RET (empty): show the next 2/3 of a page, if pagination is enabled

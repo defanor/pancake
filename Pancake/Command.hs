@@ -59,7 +59,7 @@ data Command = Quit
              | Show Int
              | ShowCurrent
              | Shortcut String String
-             | ReloadConfig
+             | LoadConfig (Maybe FilePath)
              | SetWidth (Maybe Int)
              | Redisplay
              deriving (Show, Eq)
@@ -75,7 +75,6 @@ basicCommand = choice . map (\(s, c) -> try (string s <* eof) *> pure c) $
   , ("[", Back)
   , ("]", Forward)
   , (",", GoTo Nothing RCurrent)
-  , ("reload config", ReloadConfig)
   , ("help", Help)
   , ("?", ShowCurrent)
   , ("redisplay", Redisplay)
@@ -151,7 +150,13 @@ pNat = read <$> many1 digit
 -- | 'SetWidth' command parser.
 setWidth :: Parser Command
 setWidth = string "set width"
-           *> (SetWidth <$> optionMaybe (spaces *> pNat))
+           *> (SetWidth <$> optionMaybe (space *> pNat))
+           <* eof
+
+-- | 'LoadConfig' command parser.
+loadConf :: Parser Command
+loadConf = string "load config"
+           *> (LoadConfig <$> optionMaybe (space *> many1 anyChar))
            <* eof
 
 -- | Command parser.
@@ -166,5 +171,6 @@ command c =
           , saveCurrent <?> "save current"
           , save <?> "save"
           , setWidth <?> "set width"
+          , loadConf <?> "load config"
           , goTo <?> "follow uri"
           ])

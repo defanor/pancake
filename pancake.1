@@ -4,7 +4,7 @@
 pancake - a CLI/Emacs web/gopher/file browser
 
 .SH SYNOPSIS
-pancake [\fIoption ...\fR] [\fcommand\fR ...]
+pancake [\fIoption ...\fR] [--] [\fIcommand ...\fR]
 
 .SH DESCRIPTION
 Pancake utilizes pandoc and external downloaders such as curl, adding
@@ -21,8 +21,10 @@ as emacs, rlwrap, tmux, screen.
 Print version and exit.
 .IP "\fB\-\-help\fR"
 Print a help message.
-.IP "\fB\-\-embedded\fR"
+.IP "\fB\-e, \-\-embedded\fR"
 Run in the embedded mode.
+.IP "\fB\-c \fIFILE\fB, \-\-config=\fIFILE\fB\fR"
+Load configuration from a specified file.
 
 .SH COMMANDS
 .IP "\fBquit\fR or EOF"
@@ -31,8 +33,9 @@ quit pancake, cleaning the cache
 back
 .IP "\fB]\fR"
 forward
-.IP "\fBreload config\fR"
-reload config
+.IP "\fBload config\fR[ \fIpath\fR]"
+load configuration from a specified file or reload it from the default
+one
 .IP "\fBhelp\fR"
 show a help message
 .IP "\fB?\fR"

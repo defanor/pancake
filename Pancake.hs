@@ -96,9 +96,9 @@ printDoc uri doc = do
     modify (\s -> s { position = rows })
 
 -- | Updates 'LoopState' with user configuration.
-updateConfig :: MonadIO m => StateT LoopState m ()
-updateConfig = do
-  c <- loadConfig
+updateConfig :: MonadIO m => Maybe FilePath -> StateT LoopState m ()
+updateConfig mp = do
+  c <- loadConfig mp
   u <- prepareUnclutter c
   modify $ \s -> s { conf = c, unclutterRegexps = u }
 
@@ -309,7 +309,7 @@ command ShowCurrent = do
     _ -> pure ()
 command (Shortcut u q) = command . GoTo Nothing . RURI . fromJust . parseURI $
   u ++ escapeURIString isUnreserved q
-command ReloadConfig = updateConfig
+command (LoadConfig p) = updateConfig p
 command Quit = liftIO $ do
   dir <- getXdgDirectory XdgCache "pancake"
   exists <- doesDirectoryExist dir
@@ -344,7 +344,8 @@ eventLoop = do
     handleAsync other = throw other
 
 -- | Command-line options.
-data Option = OVersion | OHelp | OEmbedded deriving (Show)
+data Option = OVersion | OHelp | OEmbedded | OConfig FilePath
+  deriving (Show, Eq)
 
 -- | Command-line option descriptions for 'getOpt'.
 options :: [OptDescr Option]
@@ -352,7 +353,10 @@ options = [ Option [] ["version"] (NoArg OVersion)
             "show version number and exit"
           , Option [] ["help"] (NoArg OHelp) "show help message and exit"
           , Option ['e'] ["embedded"] (NoArg OEmbedded)
-            "run in the embedded mode" ]
+            "run in the embedded mode"
+          , Option ['c'] ["config"] (ReqArg OConfig "FILE")
+            "load configuration from a specified file"
+          ]
 
 -- | Loads configuration and runs 'eventLoop'.
 main :: IO ()
@@ -361,22 +365,27 @@ main = do
   -- A hack to receive SIGINT reliably.
   tid <- myThreadId
   _ <- installHandler sigINT (Catch (throwTo tid UserInterrupt)) Nothing
-  let run cmd e = do
-        let maybeCommand =
-              if null cmd
-              then pure ()
-              else get >>= \st -> command (parseCommand (conf st) (unwords cmd))
-        _ <- runStateT (updateConfig >> maybeCommand >> eventLoop)
-             (LS ([],[]) 0 [] def e False [] Nothing)
-        pure ()
-  let opt = getOpt Permute options args
-  case opt of
-    (_, _, errors) -> mapM_ putErrLn errors
-  case opt of
-    ([], cmd, _) -> run cmd False
-    ([OEmbedded], cmd, _) -> run cmd True
-    ([OVersion], [], _) -> putStrLn $ "pancake " ++ showVersion version
-    _ -> do
-      p <- getProgName
-      putStrLn $
-        usageInfo ("Usage: " ++ p ++ " [option ...] [command ...]") options
+  let (opts, cmd, errors) = getOpt Permute options args
+      run
+        | OVersion `elem` opts = putStrLn $ "pancake " ++ showVersion version
+        | OHelp `elem` opts || not (null errors) = do
+            mapM_ putErrLn errors
+            p <- getProgName
+            putStrLn $ usageInfo
+              ("Usage: " ++ p ++ " [option ...] [command ...]") options
+        | otherwise = do
+            let maybeCommand =
+                  if null cmd
+                  then pure ()
+                  else get
+                       >>= \st -> command (parseCommand (conf st) (unwords cmd))
+            _ <- runStateT
+                 (updateConfig (findConf opts) >> maybeCommand >> eventLoop)
+                 (LS ([],[]) 0 [] def (OEmbedded `elem` opts) False [] Nothing)
+            pure ()
+  run
+  where
+    findConf :: [Option] -> Maybe FilePath
+    findConf [] = Nothing
+    findConf (OConfig fp:_) = Just fp
+    findConf (_:xs) = findConf xs

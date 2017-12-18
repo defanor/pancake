@@ -116,11 +116,14 @@ instance Default Config where
         "-w \"\n-pancake-\nuri: %{url_effective}\ntype: %{content_type}\n\" "
 
 -- | Loads configuration from an XDG config directory.
-loadConfig :: MonadIO m => m Config
-loadConfig = liftIO $ do
-  dir <- getXdgDirectory XdgConfig "pancake"
-  createDirectoryIfMissing True dir
-  let configPath = dir </> "config.yaml"
+loadConfig :: MonadIO m => Maybe FilePath -> m Config
+loadConfig mp = liftIO $ do
+  configPath <- case mp of
+    Nothing -> do
+      dir <- getXdgDirectory XdgConfig "pancake"
+      createDirectoryIfMissing True dir
+      pure $ dir </> "config.yaml"
+    Just p -> pure p
   exists <- doesFileExist configPath
   if exists
     then do
