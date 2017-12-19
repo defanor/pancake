@@ -1,5 +1,14 @@
 # Revision history for pancake
 
+## 0.1.8 -- 2017-12-19
+
+* XSLT-based web page transformation (uncluttering) support is
+  introduced.
+* Breaking pancake.el change: `pancake-browse-url' is removed.
+* Bugfix: empty tables handling.
+* A few minor improvements.
+
+
 ## 0.1.7 -- 2017-12-09
 
 * 'b' and 'f' commands are replaced with '[' and ']'.
