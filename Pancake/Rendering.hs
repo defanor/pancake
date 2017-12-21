@@ -400,11 +400,25 @@ readInline (P.Span attr i) = do
 
 -- | Reads lines of inline elements.
 readInlines :: [P.Inline] -> Renderer [StyledLine]
-readInlines i = pure . concat <$> mapM readInline i
+readInlines i = do
+  inlineBits <- concat <$> mapM readInline i
+  pure $ pure inlineBits
+
+-- | Akin to 'lines', but for 'Inline' elements.
+inlines :: [P.Inline] -> [[P.Inline]]
+inlines = flip inlines' []
+  where inlines' :: [P.Inline] -> [P.Inline] -> [[P.Inline]]
+        inlines' [] [] = []
+        inlines' [] curLine = [curLine]
+        inlines' (P.LineBreak : xs) curLine = curLine : inlines' xs []
+        inlines' (other : xs) curLine = inlines' xs (curLine ++ [other])
 
 -- | Renders a block element.
 renderBlock :: P.Block -> Renderer ()
-renderBlock (P.Plain i) = indented =<< readInlines i
+renderBlock (P.Plain i) =
+  zipWithM_ (\l n -> withBreadcrumb n $
+              (pure . concat <$> mapM readInline l) >>= indented)
+  (inlines i) [1..]
 renderBlock (P.Para i) = indented =<< readInlines i
 renderBlock (P.LineBlock i) =
   zipWithM_ (\l n -> withBreadcrumb n $
