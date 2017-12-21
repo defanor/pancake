@@ -431,7 +431,7 @@ renderBlock (P.DefinitionList dl) =
   let renderDefinition (term, definition) = do
         indented =<< map (map (Fg Yellow)) <$> readInlines term
         withIndent $ mapM_ renderBlocks definition
-  in mapM_ renderDefinition dl
+  in zipWithM_ (\n -> withBreadcrumb n . renderDefinition) [1..] dl
 renderBlock (P.Header level attr i) = do
   storeAttr attr
   indented =<< map (map (Denote (Heading level) . Bold . Fg Green)
