@@ -187,17 +187,17 @@ goTo t u' = do
         let (prev, _) = history s
         in s {history = (take (historyDepth $ conf s) $ HE uri doc 0:prev, [])}
 
--- | Line number to block position.
-lineToPos :: [(Int, Int)] -> Int -> Int
-lineToPos bs n =
+-- | Line number to a fixed block's number.
+lineToBlockNumber :: [(Int, Int)] -> Int -> Int
+lineToBlockNumber bs n =
   case filter (\(_, (f, l)) -> f <= n && n < l) (zip [0..] bs) of
     [] -> 0
     xs -> (\(p, _) -> p) $
       maximumBy (\(_, (l, _)) (_, (l', _)) -> compare l l') xs
 
--- | Block position to line number.
-posToLine :: [(Int, Int)] -> Int -> Int
-posToLine bs p
+-- | Fixed block's number to line number.
+blockNumberToLine :: [(Int, Int)] -> Int -> Int
+blockNumberToLine bs p
   | length bs <= p = 1
   | otherwise = fst $ bs !! p
 
@@ -207,7 +207,8 @@ scrollToLine n = get >>= \st -> when (n > position st || embedded st) $ do
   -- update history entry's position
   case history st of
     (h : prev, next) -> modify $ \s ->
-      s {history = (h {hPos = lineToPos (rBlocks $ rendered st) n}:prev, next)}
+      s {history =
+         (h {hPos = lineToBlockNumber (rBlocks $ rendered st) n}:prev, next)}
     _ -> pure ()
   -- go to line
   if embedded st
@@ -217,10 +218,10 @@ scrollToLine n = get >>= \st -> when (n > position st || embedded st) $ do
       drop (position st) (rLines $ rendered st)
     modify (\s -> s { position = n })
 
--- | Scrolls to a block's position.
+-- | Scrolls to a fixed block's position.
 scrollToBlock :: MonadIO m => Int -> StateT LoopState m ()
 scrollToBlock b = get
-  >>= \s -> scrollToLine $ posToLine (rBlocks $ rendered s) b
+  >>= \s -> scrollToLine $ blockNumberToLine (rBlocks $ rendered s) b
 
 -- | Evaluates user commands.
 command :: MonadIO m => Command -> StateT LoopState m ()
@@ -358,7 +359,7 @@ command (SetPos mp) = let p = fromMaybe 0 mp in modify $ \s ->
     , history =
       case history s of
         (h:prev, next) ->
-          (h { hPos = lineToPos (rBlocks $ rendered s) p } : prev, next)
+          (h { hPos = lineToBlockNumber (rBlocks $ rendered s) p } : prev, next)
         other -> other}
 command Redisplay = do
   st <- get
@@ -369,7 +370,7 @@ command Redisplay = do
     _ -> putErrLn "There's nothing to redisplay"
 
 
--- | Reads commands, runs them.
+-- | Reads commands, runs them with 'command'.
 eventLoop :: MonadIO m => StateT LoopState m ()
 eventLoop = do
   st <- get

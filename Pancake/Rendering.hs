@@ -96,11 +96,18 @@ data RS = RS { indentationLevel :: Int
 
 -- | This is what gets rendered.
 data RendererOutput = RLink URI
+                    -- ^ An URI reference.
                     | RNote [RendererOutput]
+                    -- ^ A note.
                     | RLine StyledLine
+                    -- ^ A line to render.
                     | RIdentifier String Int
+                    -- ^ An identifier.
                     | RBlock Int Int
-                    -- ^ number, start line, end line
+                    -- ^ A fixed block's position (start line and end
+                    -- line). These blocks reflect semantics and don't
+                    -- vary as the terminal width changes, so they are
+                    -- safe to rely on for position retention.
                     deriving (Show, Eq)
 
 -- | Show a reference.
@@ -125,7 +132,7 @@ rIdentifiers [] = []
 rIdentifiers (RIdentifier s i:xs) = (s, i) : rIdentifiers xs
 rIdentifiers (_:xs) = rIdentifiers xs
 
--- | Extracts block positions.
+-- | Extracts fixed block positions.
 rBlocks :: [RendererOutput] -> [(Int, Int)]
 rBlocks [] = []
 rBlocks (RBlock s e:xs) = (s, e) : rBlocks xs

@@ -51,7 +51,8 @@ import Control.Exception
 import Pancake.Common
 import Pancake.Configuration
 
--- | Tries to unclutter a document.
+-- | Tries to unclutter a document by applying an XSLT if it's
+-- available.
 tryUnclutter :: MonadIO m
              => [(Regex, String)]
              -- ^ Obtained with 'prepareUnclutter'.

@@ -115,7 +115,8 @@ instance Default Config where
       curl = "curl --compressed -4 -L " ++
         "-w \"\n-pancake-\nuri: %{url_effective}\ntype: %{content_type}\n\" "
 
--- | Loads configuration from an XDG config directory.
+-- | Loads configuration from a given 'FilePath', or from an XDG
+-- config directory. Writes a default one if it doesn't exist.
 loadConfig :: MonadIO m => Maybe FilePath -> m Config
 loadConfig mp = liftIO $ do
   configPath <- case mp of
