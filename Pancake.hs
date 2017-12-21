@@ -188,18 +188,18 @@ goTo t u' = do
         in s {history = (take (historyDepth $ conf s) $ HE uri doc 0:prev, [])}
 
 -- | Line number to block position.
-lineToPos :: [(Int, Int, Int)] -> Int -> Int
+lineToPos :: [(Int, Int)] -> Int -> Int
 lineToPos bs n =
-  case filter (\(_, f, l) -> f <= n && n < l) bs of
+  case filter (\(_, (f, l)) -> f <= n && n < l) (zip [0..] bs) of
     [] -> 0
-    xs -> (\(p, _, _) -> p) $
-      maximumBy (\(_, l, _) (_, l', _) -> compare l l') xs
+    xs -> (\(p, _) -> p) $
+      maximumBy (\(_, (l, _)) (_, (l', _)) -> compare l l') xs
 
 -- | Block position to line number.
-posToLine :: [(Int, Int, Int)] -> Int -> Int
-posToLine bs p = case filter (\(p', _, _) -> p' == p) bs of
-  [] -> 1
-  ((_, f, _):_) -> f
+posToLine :: [(Int, Int)] -> Int -> Int
+posToLine bs p
+  | length bs <= p = 1
+  | otherwise = fst $ bs !! p
 
 -- | Scrolls to a line, which would be at the bottom for CLI.
 scrollToLine :: MonadIO m => Int -> StateT LoopState m ()
