@@ -61,6 +61,7 @@ data Command = Quit
              | Shortcut String String
              | LoadConfig (Maybe FilePath)
              | SetWidth (Maybe Int)
+             | SetPos (Maybe Int)
              | Redisplay
              deriving (Show, Eq)
 
@@ -153,6 +154,12 @@ setWidth = string "set width"
            *> (SetWidth <$> optionMaybe (space *> pNat))
            <* eof
 
+-- | 'SetPos' command parser.
+setPos :: Parser Command
+setPos = string "set position"
+         *> (SetPos <$> optionMaybe (space *> pNat))
+         <* eof
+
 -- | 'LoadConfig' command parser.
 loadConf :: Parser Command
 loadConf = string "load config"
@@ -171,6 +178,7 @@ command c =
           , saveCurrent <?> "save current"
           , save <?> "save"
           , setWidth <?> "set width"
+          , setPos <?> "set position"
           , loadConf <?> "load config"
           , goTo <?> "follow uri"
           ])

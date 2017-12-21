@@ -55,7 +55,7 @@ pInfo = do
   _ <- manyTill unascii tab
   _ <- manyTill unascii tab
   _ <- many1 digit
-  pure $ mkPrefix "" ++ lineToInlines info ++ [LineBreak]
+  pure $ mkPrefix "" ++ lineToInlines info
 
 -- | A file\/link (i.e., any other than informational) directory
 -- entry.
@@ -81,14 +81,14 @@ pLink = do
       line = case t of
         '3' -> prefix ++ lineToInlines name
         _ -> [Link (name, [], []) (prefix ++ lineToInlines name) (uri, "")]
-  pure $ line ++ [LineBreak]
+  pure $ line
 
 -- | An erroneous directory entry. Still parsing it, since there is a
 -- lot of broken directories out there -- but marking as an error.
 pError :: Parser [Inline]
 pError = do
   line <- manyTill anyChar (lookAhead $ try pEOL)
-  pure $ [Strong $ mkPrefix "error"] ++ lineToInlines line ++ [LineBreak]
+  pure $ [Strong $ mkPrefix "error"] ++ lineToInlines line
 
 -- | Parses last line, with adjustments for what's used in the wild.
 pLastLine :: Parser ()
@@ -102,8 +102,8 @@ pEOL = (endOfLine *> pure ())
   <|> (tab >> char '+' >> manyTill anyChar endOfLine *> pure ())
 
 -- | Parses a directory.
-pDirEntries :: Parser [Inline]
-pDirEntries = concat <$>
+pDirEntries :: Parser [[Inline]]
+pDirEntries =
   manyTill (choice ([ try pInfo <?> "info entry"
                     , try pLink <?> "link entry"
                     , pError <?> "erroneous entry"])
@@ -115,4 +115,4 @@ readGopher :: PandocMonad m => T.Text -> m Pandoc
 readGopher s =
   case parse pDirEntries "directory entry" s of
     Left err -> throwError $ PandocParseError $ show err
-    Right r -> pure . Pandoc mempty . pure $ Plain r
+    Right r -> pure . Pandoc mempty . pure $ LineBlock r

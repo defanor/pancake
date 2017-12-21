@@ -43,6 +43,6 @@ lineToInlines s = let (cur, next) = break (== ' ') s
 -- | Reads plain text, always succeeding and producing a single
 -- 'Plain' block.
 readPlain :: PandocMonad m => T.Text -> m Pandoc
-readPlain = pure . Pandoc mempty . pure . Plain .
-  concatMap (\l -> (lineToInlines $ T.unpack l) ++ [LineBreak])
+readPlain = pure . Pandoc mempty . pure . LineBlock
+  . map (\l -> (lineToInlines $ T.unpack l))
   . T.lines . T.filter (/= '\r')

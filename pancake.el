@@ -372,16 +372,28 @@ property. Returns a list of collected values."
   "Sets the width (in columns) that the pancake process should
 use. Current window width is used if none is provided."
   (interactive)
-  ;; Not using `pancake-process-send' here, since it itself would call
-  ;; this function.
-  (process-send-string pancake-process
-                       (format "set width %d\n"
-                               (or width (1- (window-width))))))
+  (pancake-process-send-raw
+   (format "set width %d\n" (or width (1- (window-width))))))
+
+(defun pancake-position-adjust (&optional line)
+  "Sets the position (LINE) that the pancake process should use.
+Current line is used if none is provided."
+  (interactive)
+  (pancake-process-send-raw
+   (format "set position %d\n" (or line (line-number-at-pos (point))))))
+
+(defun pancake-process-send-raw (line)
+  "Send LINE to the pancake process, without adjusting any
+parameters."
+  (process-send-string pancake-process (concat line "\n")))
 
 (defun pancake-process-send (line)
-  "Send LINE to the pancake process."
+  "Send LINE to the pancake process, adjusting width and setting
+the current position at once. See `pancake-process-send-raw' for
+a version that doesn't do that."
   (pancake-width-adjust)
-  (process-send-string pancake-process (concat line "\n")))
+  (pancake-position-adjust)
+  (pancake-process-send-raw line))
 
 (defun pancake-go-backward ()
   "Go backward in history."

@@ -63,7 +63,7 @@ Commands
                        reload it from the default one
 :help: show a help message
 :?: show current URI
-:RET (empty): show the next 2/3 of a page, if pagination is enabled
+:RET (empty): show the next page, if pagination is enabled
 :<URI>: follow an URI, possibly relative to the current one
 :<type> <URI>: same as above, but explicitly set a document type
                (html, txt, org, markdown, etc)
@@ -75,6 +75,7 @@ Commands
 :<shortcut> <query>: run a query using a shortcut defined in the
                      configuration (e.g., search)
 :set width[ <columns>]: set terminal/window width manually
+:set position[ <line>]: set current terminal/window line
 :redisplay: redisplay current document
 
 pancake-mode provides additional aliases and commands, see built-in

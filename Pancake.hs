@@ -66,8 +66,14 @@ import Paths_pancake
 -- | A zipper kind of thing, for scrolling and history traversal.
 type Sliding a = ([a], [a])
 
+-- | A history entry.
+data HistoryEntry = HE { hURI :: URI
+                       , hDoc :: P.Pandoc
+                       , hPos :: [Int]
+                       }
+
 -- | Main event loop's state.
-data LoopState = LS { history :: Sliding (URI, P.Pandoc)
+data LoopState = LS { history :: Sliding HistoryEntry
                     , position :: Int
                     , rendered :: [RendererOutput]
                     , conf :: Config
@@ -113,7 +119,7 @@ loadRaw rawURI = do
         (True, _, _) -> fromMaybe rawURI $
           parseAbsoluteURI (unEscapeString $ drop 12 (uriQuery rawURI))
         -- handle relative URIs
-        (_, False, ((cur, _):_, _)) -> relativeTo rawURI cur
+        (_, False, (h:_, _)) -> relativeTo rawURI (hURI h)
         _ -> rawURI
       uScheme = case uriScheme adjustedURI of
         [] -> "unknown"
@@ -179,7 +185,42 @@ goTo t u' = do
       printDoc uri doc
       modify $ \s ->
         let (prev, _) = history s
-        in s {history = (take (historyDepth $ conf s) $ (uri, doc) : prev, [])}
+        in s {history = (take (historyDepth $ conf s) $ HE uri doc []:prev, [])}
+
+-- | Line number to block position.
+lineToPos :: [([Int], Int, Int)] -> Int -> [Int]
+lineToPos bs n =
+  case filter (\(p, f, l) -> f <= n && n < l && not (null p)) bs of
+    [] -> []
+    xs -> (\(p, _, _) -> p) $
+      maximumBy (\(_, l, _) (_, l', _) -> compare l l') xs
+
+-- | Block position to line number.
+posToLine :: [([Int], Int, Int)] -> [Int] -> Int
+posToLine bs p = case filter (\(p', _, _) -> p' == p) bs of
+  [] -> 1
+  ((_, f, _):_) -> f
+
+-- | Scrolls to a line, which would be at the bottom for CLI.
+scrollToLine :: MonadIO m => Int -> StateT LoopState m ()
+scrollToLine n = get >>= \st -> when (n > position st || embedded st) $ do
+  -- update history entry's position
+  case history st of
+    (h : prev, next) -> modify $ \s ->
+      s {history = (h {hPos = lineToPos (rBlocks $ rendered st) n}:prev, next)}
+    _ -> pure ()
+  -- go to line
+  if embedded st
+    then putSexpLn ["goto", show n]
+    else do
+    showLines $ take (n - position st) $
+      drop (position st) (rLines $ rendered st)
+    modify (\s -> s { position = n })
+
+-- | Scrolls to a block's position.
+scrollToBlock :: MonadIO m => [Int] -> StateT LoopState m ()
+scrollToBlock b = get
+  >>= \s -> scrollToLine $ posToLine (rBlocks $ rendered s) b
 
 -- | Evaluates user commands.
 command :: MonadIO m => Command -> StateT LoopState m ()
@@ -230,7 +271,7 @@ command (Save (RNumber i) p) = do
 command (Save RCurrent p) = do
   st <- get
   case history st of
-    ((u, _):_, _) -> command $ Save (RURI u) p
+    (h:_, _) -> command $ Save (RURI $ hURI h) p
     _ -> pure ()
 command (GoTo t (RURI u@(URI _ _ _ _ ('#':xs)))) = do
   -- follow an URI first, if it's not just a fragment
@@ -239,17 +280,11 @@ command (GoTo t (RURI u@(URI _ _ _ _ ('#':xs)))) = do
     _ -> goTo t u
   -- get to the fragment
   st <- get
-  case (lookup xs (rIdentifiers $ rendered st), embedded st) of
-    (Nothing, _) -> putErrLn $ "Unknown identifier: " ++ xs
-    (Just x, False) -> do
-      term <- liftIO setupTermFromEnv
-      let lineCount = fromMaybe 25 (getCapability term termLines)
-      when (x + lineCount - 2 > position st) $ do
-        -- scroll to the given position without skipping anything
-        showLines $ take (x - position st + lineCount - 2) $
-          drop (position st) (rLines $ rendered st)
-        modify (\s -> s { position = x + lineCount - 2 })
-    (Just x, True) -> putSexpLn ["goto", show x]
+  term <- liftIO setupTermFromEnv
+  let lineCount = fromMaybe 25 (getCapability term termLines)
+  maybe (putErrLn $ "Unknown identifier: " ++ xs)
+    (\pos -> scrollToLine $ if embedded st then pos else pos + lineCount - 2)
+    (lookup xs (rIdentifiers $ rendered st))
 command (GoTo t (RURI u)) = goTo t u
 command (GoTo t (RNumber i)) = do
   st <- get
@@ -259,37 +294,38 @@ command (GoTo t (RNumber i)) = do
 command Back = do
   st <- get
   case history st of
-    (cur:p@(uri, d):prev, next) -> do
-      printDoc uri d
+    (cur:h:prev, next) -> do
+      printDoc (hURI h) (hDoc h)
+      scrollToBlock (hPos h)
       modify $ \s ->
-        s { history = (p:prev, take (historyDepth $ conf s) $ cur : next) }
+        s { history = (h:prev, take (historyDepth $ conf s) $ cur : next) }
     _ -> putErrLn "There's nothing back there"
 command Forward = do
   st <- get
   case history st of
-    (prev, n@(uri, d):next) -> do
-      printDoc uri d
+    (prev, h:next) -> do
+      printDoc (hURI h) (hDoc h)
+      scrollToBlock (hPos h)
       modify $ \s ->
-        s { history = (take (historyDepth $ conf s) $ n : prev, next) }
+        s { history = (take (historyDepth $ conf s) $ h:prev, next) }
     _ -> putErrLn "Nowhere to go"
 command More = do
   st <- get
   unless (embedded st) $ do
     term <- liftIO setupTermFromEnv
-    let lineCount' = fromMaybe 25 (getCapability term termLines)
-        lineCount = lineCount' - div lineCount' 3
-    showLines $ take lineCount $ drop (position st) (rLines $ rendered st)
-    modify (\s -> s { position = position st + lineCount })
+    let lineCount = fromMaybe 25 (getCapability term termLines)
+    scrollToLine (position st + lineCount - 3)
 command (GoTo t RCurrent) = do
   st <- get
   case history st of
-    ((u, _):prev, next) -> do
-      (uri, d) <- loadDocument t u
+    (h : prev, next) -> do
+      (uri, d) <- loadDocument t (hURI h)
       case d of
         Nothing -> pure ()
         Just doc -> do
           printDoc uri doc
-          modify $ \s -> s { history = ( (u, doc):prev, next ) }
+          scrollToBlock (hPos h)
+          modify $ \s -> s {history = (HE (hURI h) doc (hPos h) : prev, next)}
     _ -> putErrLn "There's nothing to reload"
 command Help = do
   st <- get
@@ -305,7 +341,7 @@ command (Show n) = do
 command ShowCurrent = do
   st <- get
   case history st of
-    ((u, _):_, _) -> putErrLn $ show u
+    (h:_, _) -> putErrLn $ show (hURI h)
     _ -> pure ()
 command (Shortcut u q) = command . GoTo Nothing . RURI . fromJust . parseURI $
   u ++ escapeURIString isUnreserved q
@@ -317,10 +353,19 @@ command Quit = liftIO $ do
 command Interrupt =
   putErrLn "Received SIGINT. Interrupt twice in a row to quit."
 command (SetWidth w) = modify $ \s -> s { columns = w }
+command (SetPos mp) = let p = fromMaybe 0 mp in modify $ \s ->
+  s { position = p
+    , history =
+      case history s of
+        (h:prev, next) ->
+          (h { hPos = lineToPos (rBlocks $ rendered s) p } : prev, next)
+        other -> other}
 command Redisplay = do
   st <- get
   case history st of
-    ((uri, doc):_, _) -> printDoc uri doc
+    (h:_, _) -> do
+      printDoc (hURI h) (hDoc h)
+      scrollToBlock (hPos h)
     _ -> putErrLn "There's nothing to redisplay"
 
 
