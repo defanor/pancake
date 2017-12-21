@@ -69,7 +69,7 @@ type Sliding a = ([a], [a])
 -- | A history entry.
 data HistoryEntry = HE { hURI :: URI
                        , hDoc :: P.Pandoc
-                       , hPos :: [Int]
+                       , hPos :: Int
                        }
 
 -- | Main event loop's state.
@@ -185,18 +185,18 @@ goTo t u' = do
       printDoc uri doc
       modify $ \s ->
         let (prev, _) = history s
-        in s {history = (take (historyDepth $ conf s) $ HE uri doc []:prev, [])}
+        in s {history = (take (historyDepth $ conf s) $ HE uri doc 0:prev, [])}
 
 -- | Line number to block position.
-lineToPos :: [([Int], Int, Int)] -> Int -> [Int]
+lineToPos :: [(Int, Int, Int)] -> Int -> Int
 lineToPos bs n =
-  case filter (\(p, f, l) -> f <= n && n < l && not (null p)) bs of
-    [] -> []
+  case filter (\(_, f, l) -> f <= n && n < l) bs of
+    [] -> 0
     xs -> (\(p, _, _) -> p) $
       maximumBy (\(_, l, _) (_, l', _) -> compare l l') xs
 
 -- | Block position to line number.
-posToLine :: [([Int], Int, Int)] -> [Int] -> Int
+posToLine :: [(Int, Int, Int)] -> Int -> Int
 posToLine bs p = case filter (\(p', _, _) -> p' == p) bs of
   [] -> 1
   ((_, f, _):_) -> f
@@ -218,7 +218,7 @@ scrollToLine n = get >>= \st -> when (n > position st || embedded st) $ do
     modify (\s -> s { position = n })
 
 -- | Scrolls to a block's position.
-scrollToBlock :: MonadIO m => [Int] -> StateT LoopState m ()
+scrollToBlock :: MonadIO m => Int -> StateT LoopState m ()
 scrollToBlock b = get
   >>= \s -> scrollToLine $ posToLine (rBlocks $ rendered s) b
 

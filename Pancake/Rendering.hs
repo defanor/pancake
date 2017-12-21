@@ -92,7 +92,7 @@ data RS = RS { indentationLevel :: Int
              , listing :: Maybe Listing
              , columns :: Int
              , rsConf :: Config
-             , breadcrumbs :: [Int]
+             , elemNumber :: Int
              } deriving (Show, Eq)
 
 -- | This is what gets rendered.
@@ -100,8 +100,8 @@ data RendererOutput = RLink URI
                     | RNote [RendererOutput]
                     | RLine StyledLine
                     | RIdentifier String Int
-                    | RBlock [Int] Int Int
-                    -- ^ path, start line, end line
+                    | RBlock Int Int Int
+                    -- ^ number, start line, end line
                     deriving (Show, Eq)
 
 -- | Show a reference.
@@ -127,7 +127,7 @@ rIdentifiers (RIdentifier s i:xs) = (s, i) : rIdentifiers xs
 rIdentifiers (_:xs) = rIdentifiers xs
 
 -- | Extracts block positions.
-rBlocks :: [RendererOutput] -> [([Int], Int, Int)]
+rBlocks :: [RendererOutput] -> [(Int, Int, Int)]
 rBlocks [] = []
 rBlocks (RBlock p s e:xs) = (p, s, e) : rBlocks xs
 rBlocks (_:xs) = rBlocks xs
@@ -159,7 +159,7 @@ runRenderer :: Int
             -- ^ Collected links and text lines.
 runRenderer cols ls ns ln cnf r =
   let o = snd $ evalState (runWriterT r)
-          (RS 0 ls ns ln Nothing cols cnf [])
+          (RS 0 ls ns ln Nothing cols cnf 0)
   in o ++ concatMap (map RLine . rLines) (rNotes o)
 
 -- | Stores a link, increasing the counter.
@@ -416,36 +416,36 @@ inlines = flip inlines' []
 -- | Renders a block element.
 renderBlock :: P.Block -> Renderer ()
 renderBlock (P.Plain i) =
-  zipWithM_ (\l n -> withBreadcrumb n $
+  mapM_ (\l-> enumerated $
               (pure . concat <$> mapM readInline l) >>= indented)
-  (inlines i) [1..]
+  (inlines i)
 renderBlock (P.Para i) = indented =<< readInlines i
 renderBlock (P.LineBlock i) =
-  zipWithM_ (\l n -> withBreadcrumb n $
-              (pure . concat <$> mapM readInline l) >>= indented)
-  i [1..]
+  mapM_ (\l -> enumerated $
+               (pure . concat <$> mapM readInline l) >>= indented)
+  i
 renderBlock (P.CodeBlock attr s) = do
   storeAttr attr
-  zipWithM_ (\l n -> withBreadcrumb n $ indented [l])
-    (map (pure . Fg Green . fromString) $ lines s) [1..]
+  mapM_ (enumerated . indented . pure)
+    (map (pure . Fg Green . fromString) $ lines s)
 renderBlock (P.RawBlock _ s) =
   indented $ map (pure . fromString) $ lines s
 renderBlock (P.BlockQuote bs) = withIndent $ renderBlocks bs
 renderBlock (P.OrderedList _ bs) = do
   zipWithM_ (\b n -> modify (\s -> s { listing = Just (Ordered n) })
-                     >> withBreadcrumb n (keepIndent (renderBlocks b)))
+                     >> enumerated (keepIndent (renderBlocks b)))
     bs [1..]
   modify $ \s -> s { listing = Nothing }
 renderBlock (P.BulletList bs) = do
-  zipWithM_ (\b n -> modify (\s -> s { listing = Just Bulleted })
-                     >> withBreadcrumb n (keepIndent (renderBlocks b)))
-    bs [1..]
+  mapM_ (\b -> modify (\s -> s { listing = Just Bulleted })
+               >> enumerated (keepIndent (renderBlocks b)))
+    bs
   modify $ \s -> s { listing = Nothing }
 renderBlock (P.DefinitionList dl) =
   let renderDefinition (term, definition) = do
         indented =<< map (map (Fg Yellow)) <$> readInlines term
         withIndent $ mapM_ renderBlocks definition
-  in zipWithM_ (\n -> withBreadcrumb n . renderDefinition) [1..] dl
+  in mapM_ (enumerated . renderDefinition) dl
 renderBlock (P.Header level attr i) = do
   storeAttr attr
   indented =<< map (map (Denote (Heading level) . Bold . Fg Green)
@@ -470,10 +470,11 @@ renderBlock (P.Table caption aligns widths headers rows) = do
                       else fromIntegral l / fromIntegral (sum lens) * 0.7
                            + 1 / fromIntegral (length lens) * 0.3) lens
   let withHead = if all null headers then id else (headers :)
-  zipWithM_
-    (\r n -> withBreadcrumb n (renderBlock P.HorizontalRule >> tableRow ws r))
-    (withHead rows) [1..]
-  renderBlock P.HorizontalRule
+  mapM_
+    (\r -> (enumerated (renderBlock P.HorizontalRule)
+            >> enumerated (tableRow ws r)))
+    (withHead rows)
+  enumerated $ renderBlock P.HorizontalRule
   where
     renderCell :: Int -> [P.Block] -> Renderer [RendererOutput]
     renderCell w blocks = do
@@ -541,29 +542,24 @@ skipAfter (P.Div _ bs@(_:_)) = skipAfter $ last bs
 skipAfter b = isList b
 
 -- | Stores a block position.
-withBreadcrumb :: Int -> Renderer a -> Renderer a
-withBreadcrumb n r = do
+enumerated :: Renderer a -> Renderer a
+enumerated r = do
   st <- get
-  let p = n : breadcrumbs st
-      lineStart = lineNumber st
-  modify $ \s -> s { breadcrumbs = p }
+  modify $ \s -> s { elemNumber = elemNumber s + 1 }
   ret <- r
-  modify $ \s -> s { breadcrumbs = breadcrumbs st }
   st' <- get
-  tell [RBlock p lineStart (lineNumber st')]
+  tell [RBlock (elemNumber st) (lineNumber st) (lineNumber st')]
   pure ret
 
 -- | Renders block elements with empty lines between some of them.
 renderBlocks :: [P.Block] -> Renderer ()
-renderBlocks = renderBlocks' 0
-  where
-    renderBlocks' _ [] = pure ()
-    renderBlocks' n [b] = withBreadcrumb n $ renderBlock b
-    renderBlocks' n (b1:bs@(b2:_)) = do
-      withBreadcrumb n $ renderBlock b1
-      when (skipAfter b1 || skipBefore b2) $
-        withBreadcrumb (n + 1) $ storeLines [[]]
-      renderBlocks' (n + 2) bs
+renderBlocks [] = pure ()
+renderBlocks [b] = enumerated $ renderBlock b
+renderBlocks (b1:bs@(b2:_)) = do
+  enumerated $ renderBlock b1
+  when (skipAfter b1 || skipBefore b2) $
+    enumerated $ storeLines [[]]
+  renderBlocks bs
 
 -- | Renders a document.
 renderDoc :: Int
