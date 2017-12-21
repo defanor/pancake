@@ -546,10 +546,10 @@ renderBlocks = renderBlocks' 0
     renderBlocks' _ [] = pure ()
     renderBlocks' n [b] = withBreadcrumb n $ renderBlock b
     renderBlocks' n (b1:bs@(b2:_)) = do
-      withBreadcrumb n $ do
-        renderBlock b1
-        when (skipAfter b1 || skipBefore b2) $ storeLines [[]]
-      renderBlocks' (n + 1) bs
+      withBreadcrumb n $ renderBlock b1
+      when (skipAfter b1 || skipBefore b2) $
+        withBreadcrumb (n + 1) $ storeLines [[]]
+      renderBlocks' (n + 2) bs
 
 -- | Renders a document.
 renderDoc :: Int
