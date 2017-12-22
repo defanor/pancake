@@ -421,7 +421,17 @@ readInline (P.Span attr i) = do
 readInlines :: [P.Inline] -> Renderer [StyledLine]
 readInlines i = do
   inlineBits <- concat <$> mapM readInline i
-  pure $ pure inlineBits
+  pure $ styledLines inlineBits
+
+-- | Splits a list of styled elements into styled lines. Like
+-- 'inlines', but for processed elements.
+styledLines :: [Styled] -> [StyledLine]
+styledLines = styledLines' []
+  where
+    styledLines' cur [] = [cur]
+    styledLines' cur (x:xs)
+      | unstyled [x] == "\n" = cur : styledLines' [] xs
+      | otherwise = styledLines' (cur ++ [x]) xs
 
 -- | Akin to 'lines', but for 'Inline' elements.
 inlines :: [P.Inline] -> [[P.Inline]]
