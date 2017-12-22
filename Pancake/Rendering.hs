@@ -48,7 +48,6 @@ import Control.Monad.State
 import System.FilePath
 import Data.Char
 import Numeric
-import Data.Maybe
 
 import Pancake.Configuration
 
@@ -246,7 +245,7 @@ indented slines = do
         (Just (Ordered n)) -> Fg Yellow $ fromString $ show n ++ ". "
       prefixLen = length $ unstyled [prefix]
       indent = il + prefixLen
-      fittedLines = if noWrap st && isNothing (listing st)
+      fittedLines = if noWrap st
                     then slines
                     else fitLines (columns st - indent) slines
       pad = (fromString (replicate indent ' ') :)
@@ -452,15 +451,19 @@ renderBlock (P.RawBlock _ s) =
   indented $ map (pure . fromString) $ lines s
 renderBlock (P.BlockQuote bs) = withIndent $ renderBlocks bs
 renderBlock (P.OrderedList _ bs) = do
-  zipWithM_ (\b n -> modify (\s -> s { listing = Just (Ordered n) })
+  st <- get
+  zipWithM_ (\b n -> modify (\s -> s { listing = Just (Ordered n)
+                                     , noWrap = False })
                      >> fixed (keepIndent (renderBlocks b)))
     bs [1..]
-  modify $ \s -> s { listing = Nothing }
+  modify $ \s -> s { listing = Nothing, noWrap = noWrap st }
 renderBlock (P.BulletList bs) = do
-  mapM_ (\b -> modify (\s -> s { listing = Just Bulleted })
+  st <- get
+  mapM_ (\b -> modify (\s -> s { listing = Just Bulleted
+                               , noWrap = False })
                >> fixed (keepIndent (renderBlocks b)))
     bs
-  modify $ \s -> s { listing = Nothing }
+  modify $ \s -> s { listing = Nothing, noWrap = noWrap st }
 renderBlock (P.DefinitionList dl) =
   let renderDefinition (term, definition) = do
         indented =<< map (map (Fg Yellow)) <$> readInlines term
