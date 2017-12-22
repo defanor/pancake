@@ -423,8 +423,15 @@ readInlines i = do
   inlineBits <- concat <$> mapM readInline i
   pure $ styledLines inlineBits
 
--- | Splits a list of styled elements into styled lines. Like
--- 'inlines', but for processed elements.
+-- | Like 'readLines', but renders the lines at once, one-by-one,
+-- making sure that identifier positions are correct.
+renderInlines :: [P.Inline] -> Renderer ()
+renderInlines i = do
+  inlineBits <- concat <$> mapM readInline i
+  mapM_ (\l -> fixed $ indented [l]) $ styledLines inlineBits
+
+-- | Splits a list of styled elements into styled lines, similar to
+-- 'lines'.
 styledLines :: [Styled] -> [StyledLine]
 styledLines = styledLines' []
   where
@@ -433,26 +440,11 @@ styledLines = styledLines' []
       | unstyled [x] == "\n" = cur : styledLines' [] xs
       | otherwise = styledLines' (cur ++ [x]) xs
 
--- | Akin to 'lines', but for 'Inline' elements.
-inlines :: [P.Inline] -> [[P.Inline]]
-inlines = flip inlines' []
-  where inlines' :: [P.Inline] -> [P.Inline] -> [[P.Inline]]
-        inlines' [] [] = []
-        inlines' [] curLine = [curLine]
-        inlines' (P.LineBreak : xs) curLine = curLine : inlines' xs []
-        inlines' (other : xs) curLine = inlines' xs (curLine ++ [other])
-
 -- | Renders a block element.
 renderBlock :: P.Block -> Renderer ()
-renderBlock (P.Plain i) =
-  mapM_ (\l-> fixed $
-              (pure . concat <$> mapM readInline l) >>= indented)
-  (inlines i)
-renderBlock (P.Para i) = indented =<< readInlines i
-renderBlock (P.LineBlock i) =
-  mapM_ (\l -> fixed $
-               (pure . concat <$> mapM readInline l) >>= indented)
-  i
+renderBlock (P.Plain i) = renderInlines i
+renderBlock (P.Para i) = renderInlines i
+renderBlock (P.LineBlock i) = mapM_ renderInlines i
 renderBlock (P.CodeBlock attr s) = do
   storeAttr attr
   mapM_ (fixed . indented . pure . pure . Fg Green . fromString)
