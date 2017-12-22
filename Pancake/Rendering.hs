@@ -204,8 +204,7 @@ storeNote ro = do
 -- | Stores text lines.
 storeLines :: [StyledLine] -> Renderer ()
 storeLines l = do
-  let newlines = sum $ map (length . filter (== '\n') . unstyled) l
-  modify (\s -> s { lineNumber = lineNumber s + length l + newlines })
+  modify (\s -> s { lineNumber = lineNumber s + length l })
   tell $ map RLine l
 
 -- | Stores attributes (identifier and line number).
