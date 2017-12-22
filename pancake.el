@@ -101,7 +101,7 @@
   "A strike-through face."
   :group 'pancake)
 
-(defcustom pancake-command '("pancake" "--embedded")
+(defcustom pancake-command '("pancake" "--embedded" "--no-wrap")
   "A command that runs pancake, along with its arguments"
   :type '(list string)
   :group 'pancake)
@@ -508,7 +508,8 @@ it to `pancake-process' as input."
   "Keymap for `pancake-mode'.")
 
 (define-derived-mode pancake-mode nil "Pancake"
-  "A basic emacs interface to the pancake browser.")
+  "A basic emacs interface to the pancake browser."
+  (visual-line-mode))
 
 (provide 'pancake)
 

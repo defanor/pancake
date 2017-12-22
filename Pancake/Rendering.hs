@@ -48,6 +48,7 @@ import Control.Monad.State
 import System.FilePath
 import Data.Char
 import Numeric
+import Data.Maybe
 
 import Pancake.Configuration
 
@@ -91,6 +92,7 @@ data RS = RS { indentationLevel :: Int
              , lineNumber :: Int
              , listing :: Maybe Listing
              , columns :: Int
+             , noWrap :: Bool
              , rsConf :: Config
              } deriving (Show, Eq)
 
@@ -151,6 +153,8 @@ type Renderer a = WriterT [RendererOutput] (State RS) a
 -- | Runs a 'Renderer'.
 runRenderer :: Int
             -- ^ Column count (line width).
+            -> Bool
+            -- ^ Leave line wrapping to UI.
             -> Int
             -- ^ Link number to start with.
             -> Int
@@ -163,9 +167,17 @@ runRenderer :: Int
             -- ^ A renderer.
             -> [RendererOutput]
             -- ^ Collected links and text lines.
-runRenderer cols ls ns ln cnf r =
+runRenderer cols llw ls ns ln cnf r =
   let o = snd $ evalState (runWriterT r)
-          (RS 0 ls ns ln Nothing cols cnf)
+          RS { indentationLevel = 0
+             , linkCount = ls
+             , noteCount = ns
+             , lineNumber = ln
+             , listing = Nothing
+             , columns = cols
+             , noWrap = llw
+             , rsConf = cnf
+             }
   in o ++ concatMap (map RLine . rLines) (rNotes o)
 
 -- | Stores a link, increasing the counter.
@@ -234,7 +246,9 @@ indented slines = do
         (Just (Ordered n)) -> Fg Yellow $ fromString $ show n ++ ". "
       prefixLen = length $ unstyled [prefix]
       indent = il + prefixLen
-      fittedLines = fitLines (columns st - indent) slines
+      fittedLines = if noWrap st && isNothing (listing st)
+                    then slines
+                    else fitLines (columns st - indent) slines
       pad = (fromString (replicate indent ' ') :)
       padFirst x = fromString (replicate il ' ') : prefix : x
   -- The following blocks of the same list item should be indented
@@ -396,7 +410,7 @@ readInline (P.Note bs) = do
   st <- get
   -- 12 is somewhat arbitrary, but narrowing the rendered notes so
   -- that "^{note xxx}" could be added without overflow.
-  let ro = runRenderer (columns st - 12) (linkCount st) (noteCount st) 0
+  let ro = runRenderer (columns st - 12) (noWrap st) (linkCount st) (noteCount st) 0
            (rsConf st) (renderBlocks bs)
   cnt <- storeNote ro
   pure [Superscript . Fg Red . fromString $ "[" ++ show cnt ++ "]"]
@@ -432,8 +446,8 @@ renderBlock (P.LineBlock i) =
   i
 renderBlock (P.CodeBlock attr s) = do
   storeAttr attr
-  mapM_ (fixed . indented . pure)
-    (map (pure . Fg Green . fromString) $ lines s)
+  mapM_ (fixed . indented . pure . pure . Fg Green . fromString)
+    (lines s)
 renderBlock (P.RawBlock _ s) =
   indented $ map (pure . fromString) $ lines s
 renderBlock (P.BlockQuote bs) = withIndent $ renderBlocks bs
@@ -476,17 +490,15 @@ renderBlock (P.Table caption aligns widths headers rows) = do
                       else fromIntegral l / fromIntegral (sum lens) * 0.7
                            + 1 / fromIntegral (length lens) * 0.3) lens
   let withHead = if all null headers then id else (headers :)
-  mapM_
-    (\r -> (fixed (renderBlock P.HorizontalRule)
-            >> fixed (tableRow ws r)))
+  mapM_ (\r -> fixed (renderBlock P.HorizontalRule) >> fixed (tableRow ws r))
     (withHead rows)
   fixed $ renderBlock P.HorizontalRule
   where
     renderCell :: Int -> [P.Block] -> Renderer [RendererOutput]
     renderCell w blocks = do
       st <- get
-      pure $ runRenderer w (linkCount st) (noteCount st) (lineNumber st)
-        (rsConf st) $ renderBlocks blocks
+      pure $ runRenderer w False (linkCount st) (noteCount st)
+        (lineNumber st) (rsConf st) $ renderBlocks blocks
     tableCell :: (P.Alignment, Int, [P.Block]) -> Renderer [StyledLine]
     tableCell (a, w, blocks) = do
       l <- renderCell w blocks
@@ -569,11 +581,13 @@ renderBlocks (b1:bs@(b2:_)) = do
 -- | Renders a document.
 renderDoc :: Int
           -- ^ Number of columns.
+          -> Bool
+          -- ^ Leave line wrapping to UI.
           -> Config
           -- ^ Configuration.
           -> P.Pandoc
           -- ^ Document to render.
           -> [RendererOutput]
           -- ^ Rendered document.
-renderDoc cols cnf (P.Pandoc _ blocks) =
-  runRenderer cols 0 0 1 cnf $ renderBlocks blocks
+renderDoc cols llw cnf (P.Pandoc _ blocks) =
+  runRenderer cols llw 0 0 1 cnf $ renderBlocks blocks

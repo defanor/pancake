@@ -78,6 +78,7 @@ data LoopState = LS { history :: Sliding HistoryEntry
                     , rendered :: [RendererOutput]
                     , conf :: Config
                     , embedded :: Bool
+                    , noWrap :: Bool
                     , interrupted :: Bool
                     , unclutterRegexps :: [(Regex, String)]
                     , columns :: Maybe Int
@@ -89,7 +90,7 @@ printDoc uri doc = do
   term <- liftIO setupTermFromEnv
   st <- get
   let cols = fromMaybe 80 $ columns st <|> getCapability term termColumns
-      l = renderDoc cols (conf st) doc
+      l = renderDoc cols (noWrap st) (conf st) doc
       textLines = rLines l
   modify (\s -> s { rendered = l })
   if embedded st
@@ -192,8 +193,7 @@ lineToBlockNumber :: [(Int, Int)] -> Int -> Int
 lineToBlockNumber bs n =
   case filter (\(_, (f, l)) -> f <= n && n < l) (zip [0..] bs) of
     [] -> 0
-    xs -> (\(p, _) -> p) $
-      maximumBy (\(_, (l, _)) (_, (l', _)) -> compare l l') xs
+    xs -> fst $ maximumBy (\(_, (l, _)) (_, (l', _)) -> compare l l') xs
 
 -- | Fixed block's number to line number.
 blockNumberToLine :: [(Int, Int)] -> Int -> Int
@@ -390,7 +390,11 @@ eventLoop = do
     handleAsync other = throw other
 
 -- | Command-line options.
-data Option = OVersion | OHelp | OEmbedded | OConfig FilePath
+data Option = OVersion
+            | OHelp
+            | OEmbedded
+            | ONoWrap
+            | OConfig FilePath
   deriving (Show, Eq)
 
 -- | Command-line option descriptions for 'getOpt'.
@@ -400,6 +404,8 @@ options = [ Option [] ["version"] (NoArg OVersion)
           , Option [] ["help"] (NoArg OHelp) "show help message and exit"
           , Option ['e'] ["embedded"] (NoArg OEmbedded)
             "run in the embedded mode"
+          , Option ['n'] ["no-wrap"] (NoArg ONoWrap)
+            "leave line wrapping to UI when appropriate"
           , Option ['c'] ["config"] (ReqArg OConfig "FILE")
             "load configuration from a specified file"
           ]
@@ -427,7 +433,16 @@ main = do
                        >>= \st -> command (parseCommand (conf st) (unwords cmd))
             _ <- runStateT
                  (updateConfig (findConf opts) >> maybeCommand >> eventLoop)
-                 (LS ([],[]) 0 [] def (OEmbedded `elem` opts) False [] Nothing)
+                 LS { history = ([],[])
+                    , position = 0
+                    , rendered = []
+                    , conf = def
+                    , embedded = OEmbedded `elem` opts
+                    , noWrap = ONoWrap `elem` opts
+                    , interrupted = False
+                    , unclutterRegexps = []
+                    , columns = Nothing
+                    }
             pure ()
   run
   where
