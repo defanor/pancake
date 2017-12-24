@@ -120,7 +120,7 @@ retrieve cmd uri = do
         ec <- waitForProcess ph
         if ec /= ExitSuccess
           then do
-          putErrLn $ "An error occured. Exit code: " ++ show ec
+          putErrLn $ "An error occurred. Exit code: " ++ show ec
           case stderr of
             Nothing -> pure ()
             Just stderr' -> do

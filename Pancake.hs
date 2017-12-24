@@ -173,7 +173,7 @@ loadDocument sType rawURI = do
               ((shell ev) { env = Just (("FILE", tmpPath) : curEnv) }) $
               \_ _ _ p -> waitForProcess p
             when (ec /= ExitSuccess) $
-              putErrLn $ "An error occured. Exit code: " ++ show ec
+              putErrLn $ "An error occurred. Exit code: " ++ show ec
           pure (effectiveURI, mzero)
 
 -- | Visits an URI, updates history accordingly.
