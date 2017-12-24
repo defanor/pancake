@@ -176,7 +176,8 @@ if no URL is provided."
   (interactive)
   (when (or new-session (not (consp pancake-buffers)))
     (pancake-new))
-  (let ((buffer (if (eq major-mode 'pancake-mode)
+  (let ((buffer (if (and (eq major-mode 'pancake-mode)
+                         (not new-session))
                     (current-buffer)
                   (car pancake-buffers))))
     (with-current-buffer buffer
