@@ -198,6 +198,18 @@ while avoiding code duplication."
                   "-"
                   (symbol-name attr))))
 
+(defun pancake-uri-at-point (&optional print-uri)
+  "Returns an absolute URI at point. Prints it when called
+interactively."
+  (interactive "p")
+  (let* ((button (button-at (point)))
+         (uri (and button (button-get button 'pancake-absolute-uri))))
+    (when print-uri
+      (if uri
+          (message "%s" uri)
+        (message "No URI found at point.")))
+    uri))
+
 (defun pancake-button-action (button)
   "An action to be invoked on button activation."
   (funcall 'browse-url (button-get button 'pancake-absolute-uri)))
@@ -506,6 +518,7 @@ it to `pancake-process' as input."
     (define-key map (kbd "Q") 'pancake-quit)
     (define-key map (kbd "R") 'pancake-reload)
     (define-key map (kbd "I") 'pancake-load-images)
+    (define-key map (kbd "U") 'pancake-uri-at-point)
     map)
   "Keymap for `pancake-mode'.")
 
