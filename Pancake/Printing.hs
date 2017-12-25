@@ -110,10 +110,12 @@ showSexps uri ro =
                                  , showDenotation d
                                  , showSexp s]
     showDenotation :: Denotation -> String
-    showDenotation (Link u) = list ["link", ".", encodeSexpStr $ show u]
-    showDenotation (Image u) = list ["image", ".", encodeSexpStr $ show u]
-    showDenotation (Math m) = list ["math", ".", encodeSexpStr m]
-    showDenotation (Heading l) = list ["heading", ".", show l]
+    showDenotation (Link u) = list [ "link", encodeSexpStr $ show u
+                                   , encodeSexpStr $ show $ relativeTo u uri]
+    showDenotation (Image u) = list [ "image", encodeSexpStr $ show u
+                                    , encodeSexpStr $ show $ relativeTo u uri]
+    showDenotation (Math m) = list ["math", encodeSexpStr m]
+    showDenotation (Heading l) = list ["heading", show l]
 
 -- | Merge elements with the same styling.
 mergeStyled :: [Styled] -> [Styled]

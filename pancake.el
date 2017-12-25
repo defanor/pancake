@@ -200,8 +200,7 @@ while avoiding code duplication."
 
 (defun pancake-button-action (button)
   "An action to be invoked on button activation."
-  (funcall 'browse-url (or (button-get button 'pancake-link)
-                           (button-get button 'pancake-image))))
+  (funcall 'browse-url (button-get button 'pancake-absolute-uri)))
 
 (defun pancake-print-elem (element)
   "Translate ELEMENT into a string."
@@ -225,23 +224,25 @@ while avoiding code duplication."
         (`(superscript . ,rest)
          (pancake-print-line rest)
          (add-text-properties start (point) '(display (raise 0.2))))
-        (`(denotation (math . ,_formula) . ,rest)
+        (`(denotation (math ,_formula) . ,rest)
          (pancake-print-line rest))
-        (`(denotation (link . ,uri) . ,rest)
+        (`(denotation (link ,uri ,absolute-uri) . ,rest)
          (pancake-print-line rest)
          (make-text-button start (point)
                            'pancake-link uri
+                           'pancake-absolute-uri absolute-uri
                            'help-echo uri
                            'follow-link t
                            'action #'pancake-button-action))
-        (`(denotation (image . ,uri) . ,rest)
+        (`(denotation (image ,uri ,absolute-uri) . ,rest)
          (pancake-print-line rest)
          (make-text-button start (point)
                            'pancake-image uri
+                           'pancake-absolute-uri absolute-uri
                            'help-echo uri
                            'follow-link t
                            'action #'pancake-button-action))
-        (`(denotation (heading . ,level) . ,rest)
+        (`(denotation (heading ,level) . ,rest)
          (pancake-print-line rest)
          (add-to-list 'pancake-headings (cons (line-number-at-pos) level))
          (add-text-properties start (point)
