@@ -26,6 +26,7 @@ A CLI\/Emacs web\/gopher\/file browser inspired by LMB.
 -}
 
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE RankNTypes #-}
 
 module Main where
 
@@ -84,8 +85,11 @@ data LoopState = LS { history :: Sliding HistoryEntry
                     , columns :: Maybe Int
                     }
 
+-- | Main event loop's type.
+type Pancake a = forall m. MonadIO m => StateT LoopState m a
+
 -- | Renders a parsed document.
-printDoc :: MonadIO m => URI -> P.Pandoc -> StateT LoopState m ()
+printDoc :: URI -> P.Pandoc -> Pancake ()
 printDoc uri doc = do
   term <- liftIO setupTermFromEnv
   st <- get
@@ -103,15 +107,14 @@ printDoc uri doc = do
     modify (\s -> s { position = rows })
 
 -- | Updates 'LoopState' with user configuration.
-updateConfig :: MonadIO m => Maybe FilePath -> StateT LoopState m ()
+updateConfig :: Maybe FilePath -> Pancake ()
 updateConfig mp = do
   c <- loadConfig mp
   u <- prepareUnclutter c
   modify $ \s -> s { conf = c, unclutterRegexps = u }
 
 -- | A wrapper around 'retrieve' that adjusts the URI.
-loadRaw :: MonadIO m => URI ->
-  StateT LoopState m (URI, Maybe (BS.ByteString, Maybe URI, Maybe String))
+loadRaw :: URI -> Pancake (URI, Maybe (BS.ByteString, Maybe URI, Maybe String))
 loadRaw rawURI = do
   st <- get
   let ddg = isPrefixOf "/l/?kh=-1&uddg=" $ uriToString id rawURI ""
@@ -132,12 +135,11 @@ loadRaw rawURI = do
 
 -- | Decides what to do with a given URI; either returns a document or
 -- runs an external viewer. Used by both 'GoTo' and 'Reload'.
-loadDocument :: MonadIO m
-             => Maybe String
+loadDocument :: Maybe String
              -- ^ Document type.
              -> URI
              -- ^ Document URI.
-             -> StateT LoopState m (URI, Maybe P.Pandoc)
+             -> Pancake (URI, Maybe P.Pandoc)
 loadDocument sType rawURI = do
   st <- get
   (adjustedURI, docData) <- loadRaw rawURI
@@ -177,7 +179,7 @@ loadDocument sType rawURI = do
           pure (effectiveURI, mzero)
 
 -- | Visits an URI, updates history accordingly.
-goTo :: MonadIO m => Maybe String -> URI -> StateT LoopState m ()
+goTo :: Maybe String -> URI -> Pancake ()
 goTo t u' = do
   (uri, d) <- loadDocument t u'
   case d of
@@ -202,7 +204,7 @@ blockNumberToLine bs p
   | otherwise = fst $ bs !! p
 
 -- | Scrolls to a line, which would be at the bottom for CLI.
-scrollToLine :: MonadIO m => Int -> StateT LoopState m ()
+scrollToLine :: Int -> Pancake ()
 scrollToLine n = get >>= \st -> when (n > position st || embedded st) $ do
   -- update history entry's position
   case history st of
@@ -219,12 +221,12 @@ scrollToLine n = get >>= \st -> when (n > position st || embedded st) $ do
     modify (\s -> s { position = n })
 
 -- | Scrolls to a fixed block's position.
-scrollToBlock :: MonadIO m => Int -> StateT LoopState m ()
+scrollToBlock :: Int -> Pancake ()
 scrollToBlock b = get
   >>= \s -> scrollToLine $ blockNumberToLine (rBlocks $ rendered s) b
 
 -- | Evaluates user commands.
-command :: MonadIO m => Command -> StateT LoopState m ()
+command :: Command -> Pancake ()
 command (Save (RURI uri') p) = do
   (uri, mraw) <- loadRaw uri'
   st <- get
@@ -371,7 +373,7 @@ command Redisplay = do
 
 
 -- | Reads commands, runs them with 'command'.
-eventLoop :: MonadIO m => StateT LoopState m ()
+eventLoop :: Pancake ()
 eventLoop = do
   st <- get
   c <- liftIO $ catches (parseCommand (conf st) <$> getLine)
