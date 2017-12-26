@@ -11,7 +11,7 @@ configuration.
 
 User interaction capabilities are rather basic, as it is intended to
 be combined with software that provides better user interfaces – such
-as emacs, rlwrap, tmux, screen.
+as emacs, tmux, screen.
 
 
 Installation

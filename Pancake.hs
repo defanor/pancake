@@ -47,13 +47,11 @@ import System.Directory
 import System.Exit
 import Control.Exception
 import Data.Char
-import System.IO.Error
 import Control.Applicative
 import Data.Version
 import System.Console.GetOpt
-import System.Posix.Signals
-import Control.Concurrent
 import Text.Regex.TDFA
+import qualified System.Console.Haskeline as HL
 
 import Pancake.Common
 import Pancake.Configuration
@@ -86,7 +84,7 @@ data LoopState = LS { history :: Sliding HistoryEntry
                     }
 
 -- | Main event loop's type.
-type Pancake a = forall m. MonadIO m => StateT LoopState m a
+type Pancake a = forall m. HL.MonadException m => StateT LoopState (HL.InputT m) a
 
 -- | Renders a parsed document.
 printDoc :: URI -> P.Pandoc -> Pancake ()
@@ -376,20 +374,13 @@ command Redisplay = do
 eventLoop :: Pancake ()
 eventLoop = do
   st <- get
-  c <- liftIO $ catches (parseCommand (conf st) <$> getLine)
-       [Handler handleIO, Handler handleAsync]
+  c <- lift $ HL.handleInterrupt (pure Interrupt) $
+    maybe Quit (parseCommand (conf st))
+    <$> HL.withInterrupt (HL.getInputLine "")
   unless (c == Interrupt && interrupted st) $ do
     command c
     modify $ \s -> s { interrupted = c == Interrupt }
     when (c /= Quit) eventLoop
-  where
-    handleIO :: IOException -> IO Command
-    handleIO e = unless (isEOFError e)
-                 (putErrLn ("Unexpected error: " ++ show e))
-                 >> pure Quit
-    handleAsync :: AsyncException -> IO Command
-    handleAsync UserInterrupt = pure Interrupt
-    handleAsync other = throw other
 
 -- | Command-line options.
 data Option = OVersion
@@ -416,9 +407,6 @@ options = [ Option [] ["version"] (NoArg OVersion)
 main :: IO ()
 main = do
   args <- getArgs
-  -- A hack to receive SIGINT reliably.
-  tid <- myThreadId
-  _ <- installHandler sigINT (Catch (throwTo tid UserInterrupt)) Nothing
   let (opts, cmd, errors) = getOpt Permute options args
       run
         | OVersion `elem` opts = putStrLn $ "pancake " ++ showVersion version
@@ -433,7 +421,10 @@ main = do
                   then pure ()
                   else get
                        >>= \st -> command (parseCommand (conf st) (unwords cmd))
-            _ <- runStateT
+            dir <- getXdgDirectory XdgConfig "pancake"
+            let hfn = dir </> "command_history"
+            _ <- HL.runInputT HL.defaultSettings {HL.historyFile = Just hfn} $
+                 runStateT
                  (updateConfig (findConf opts) >> maybeCommand >> eventLoop)
                  LS { history = ([],[])
                     , position = 0
