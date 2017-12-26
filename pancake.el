@@ -212,7 +212,10 @@ interactively."
 
 (defun pancake-button-action (button)
   "An action to be invoked on button activation."
-  (funcall 'browse-url (button-get button 'pancake-absolute-uri)))
+  (let ((pancake-uri (button-get button 'pancake-link)))
+    (if (and pancake-uri (string-prefix-p "#" pancake-uri))
+      (pancake pancake-uri)
+   (funcall 'browse-url (button-get button 'pancake-absolute-uri)))))
 
 (defun pancake-print-elem (element)
   "Translate ELEMENT into a string."
