@@ -199,14 +199,15 @@ while avoiding code duplication."
                   (symbol-name attr))))
 
 (defun pancake-uri-at-point (&optional print-uri)
-  "Returns an absolute URI at point. Prints it when called
-interactively."
+  "Returns an absolute URI at point. Prints it and puts into the
+kill ring when called interactively."
   (interactive "p")
   (let* ((button (button-at (point)))
          (uri (and button (button-get button 'pancake-absolute-uri))))
     (when print-uri
       (if uri
-          (message "%s" uri)
+          (progn (message "%s" uri)
+                 (kill-new uri))
         (message "No URI found at point.")))
     uri))
 
