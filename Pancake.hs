@@ -37,7 +37,7 @@ import Data.Default
 import Network.URI
 import System.Process
 import Control.Monad.Writer
-import Control.Monad.State
+import Control.Monad.State.Strict
 import Data.Maybe
 import Data.List
 import System.Console.Terminfo
@@ -84,7 +84,7 @@ data LoopState = LS { history :: Sliding HistoryEntry
                     }
 
 -- | Main event loop's type.
-type Pancake a = forall m. HL.MonadException m => StateT LoopState (HL.InputT m) a
+type Pancake a = forall m. HL.MonadException m => StateT LoopState m a
 
 -- | Renders a parsed document.
 printDoc :: URI -> P.Pandoc -> Pancake ()
@@ -371,16 +371,34 @@ command Redisplay = do
 
 
 -- | Reads commands, runs them with 'command'.
-eventLoop :: Pancake ()
+eventLoop :: forall m. HL.MonadException m => HL.InputT (StateT LoopState m) ()
 eventLoop = do
-  st <- get
-  c <- lift $ HL.handleInterrupt (pure Interrupt) $
+  st <- lift $ get
+  c <- HL.handleInterrupt (pure Interrupt) $
     maybe Quit (parseCommand (conf st))
     <$> HL.withInterrupt (HL.getInputLine "")
   unless (c == Interrupt && interrupted st) $ do
-    command c
-    modify $ \s -> s { interrupted = c == Interrupt }
+    lift $ command c
+    lift $ modify $ \s -> s { interrupted = c == Interrupt }
     when (c /= Quit) eventLoop
+
+-- | Extracts URI strings from history.
+historyURIs :: Pancake [String]
+historyURIs = do
+  hist <- history <$> get
+  pure $ map ((\u -> uriToString id u "") . hURI) $ fst hist ++ snd hist
+
+-- | An input completion function.
+complete :: HL.MonadException m => HL.CompletionFunc (StateT LoopState m)
+complete (l, r) = do
+  uriStrings <- historyURIs
+  pure $ complete' (reverse l) r uriStrings
+  where
+    complete' ('*':str) "" us =
+      ("", map (\s -> HL.Completion s s False) $ filter (isInfixOf str) us)
+    complete' str "" us =
+      ("", map (\s -> HL.Completion s s False) $ filter (isPrefixOf str) us)
+    complete' s _ _ = (s, [])
 
 -- | Command-line options.
 data Option = OVersion
@@ -423,9 +441,13 @@ main = do
                        >>= \st -> command (parseCommand (conf st) (unwords cmd))
             dir <- getXdgDirectory XdgConfig "pancake"
             let hfn = dir </> "command_history"
-            _ <- HL.runInputT HL.defaultSettings {HL.historyFile = Just hfn} $
-                 runStateT
-                 (updateConfig (findConf opts) >> maybeCommand >> eventLoop)
+            _ <- runStateT
+                 (HL.runInputT
+                  (HL.setComplete complete HL.defaultSettings)
+                  {HL.historyFile = Just hfn}
+                  (lift (updateConfig (findConf opts))
+                   >> lift maybeCommand
+                   >> eventLoop))
                  LS { history = ([],[])
                     , position = 0
                     , rendered = []
