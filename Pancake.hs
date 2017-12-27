@@ -115,7 +115,7 @@ updateConfig mp = do
 loadRaw :: URI -> Pancake (URI, Maybe (BS.ByteString, Maybe URI, Maybe String))
 loadRaw rawURI = do
   st <- get
-  let ddg = isPrefixOf "/l/?kh=-1&uddg=" $ uriToString id rawURI ""
+  let ddg = isInfixOf "/l/?kh=-1&uddg=" $ uriToString id rawURI ""
       adjustedURI = case (ddg, uriIsAbsolute rawURI, history st) of
         -- fix DDG links (that's rather hacky, todo: improve)
         (True, _, _) -> fromMaybe rawURI $
