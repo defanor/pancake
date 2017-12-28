@@ -23,18 +23,24 @@ import Distribution.Simple.Setup
 import System.FilePath
 import System.Directory
 
-main = defaultMainWithHooks simpleUserHooks { postCopy = installManPage }
+main = defaultMainWithHooks simpleUserHooks { postCopy = installExtras }
 
 -- | Installs pancake.1.
-installManPage :: Args
-               -> CopyFlags
-               -> PackageDescription
-               -> LocalBuildInfo
-               -> IO ()
-installManPage _ cf pd lbi = do
+installExtras :: Args
+              -> CopyFlags
+              -> PackageDescription
+              -> LocalBuildInfo
+              -> IO ()
+installExtras _ cf pd lbi = do
   let dirs = absoluteInstallDirs pd lbi (fromFlag $ copyDest cf)
-      man1 = mandir dirs </> "man1"
-      fname = "pancake.1"
-      target = man1 </> fname
+      verbosity = fromFlag $ copyVerbosity cf
+      -- todo: use absoluteComponentInstallDirs once will switch to
+      -- cabal 2, e.g.:
+      -- absoluteComponentInstallDirs pd lbi (localUnitId lbi)
+      --   (fromFlag $ copyDest cf)
+  -- install man page
+  let man1 = mandir dirs </> "man1"
+      manFileName = "pancake.1"
+      manTarget = man1 </> manFileName
   createDirectoryIfMissing True man1
-  installOrdinaryFile (fromFlag $ copyVerbosity cf) fname target
+  installOrdinaryFile verbosity manFileName manTarget

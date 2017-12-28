@@ -47,12 +47,13 @@ import Data.Text.Encoding (decodeUtf8', decodeLatin1, encodeUtf8)
 import qualified Data.Text as T
 import Control.Exception
 
-
 import Pancake.Common
 import Pancake.Configuration
+import Paths_pancake
 
 -- | Tries to unclutter a document by applying an XSLT if it's
--- available.
+-- available. Looks for a file in a user config directory first, and
+-- in the system data directory then.
 tryUnclutter :: MonadIO m
              => [(Regex, String)]
              -- ^ Obtained with 'prepareUnclutter'.
@@ -67,8 +68,12 @@ tryUnclutter rs u d = liftIO $ handle err $ do
         _ -> False
   case find matches rs of
     Just (_, fn) -> do
-      dir <- getXdgDirectory XdgConfig "pancake"
-      let src = dir </> "unclutter" </> fn <.> "xsl"
+      src <- do
+        configDir <- getXdgDirectory XdgConfig "pancake"
+        let src = configDir </> "unclutter" </> fn <.> "xsl"
+        exists <- doesFileExist src
+        dataDir <- getDataDir
+        pure $ if exists then src else dataDir </> "unclutter" </> fn <.> "xsl"
       exists <- doesFileExist src
       if exists
         then do

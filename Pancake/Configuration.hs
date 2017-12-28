@@ -109,7 +109,13 @@ instance Default Config where
     , historyDepth = 100
     , referenceDigits = "0123456789"
     , indentDivs = False
-    , unclutter = M.empty
+    , unclutter = M.fromList
+      [ ("duckduckgo", "^https://duckduckgo\\.com/lite/\\?q=")
+      , ("lobsters", "^https://lobste\\.rs/((page|recent|newest).*)?$")
+      , ("hacker-news",
+         "^https://news\\.ycombinator\\.com/((news|show|ask).*)?$")
+      , ("mediawiki", "^https://en\\.(m.)?(wiktionary|wikipedia)\\.org/wiki/")
+      , ("github", "^https://github\\.com/")]
     }
     where
       curl = "curl --compressed -4 -L " ++

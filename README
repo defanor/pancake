@@ -85,78 +85,18 @@ emacs documentation (``C-h m``) for those.
 Configuration
 -------------
 
-Default configuration will be written into XDG configuration
-directory, and would look approximately like this (slightly
-simplified)::
-
-  externalViewers:
-    png: xdg-open "${FILE}"
-    hs: emacsclient -n "${FILE}"
-  indentDivs: false
-  commands:
-    gopher: torify curl "${URI}"
-    ssh: scp "${URI_REGNAME}:${URI_PATH}" /dev/stdout
-  unclutter:
-    duckduckgo: ^https://duckduckgo\.com/lite/\?q=
-  defaultCommand: ! 'curl --compressed -4 -L -w "
-
-    -pancake-
-
-    uri: %{url_effective}
-
-    type: %{content_type}
-
-    " "${URI}"'
-  referenceDigits: 'rstwfpxcvaqzdgb'
-  shortcuts:
-    g: https://m.gutenberg.org/ebooks/search.mobile/?query=
-    ddg: https://duckduckgo.com/lite/?q=
-    wt: https://en.m.wiktionary.org/w/index.php?search=
-    wa: web-archive:///?url=
-    wp: https://en.m.wikipedia.org/wiki/Special:Search?search=
-    gp: gopher://gopherpedia.com:70/7/lookup?
-    vs: gopher://gopher.floodgap.com/7/v2/vs?
-    xiph: http://dir.xiph.org/search?search=
-  historyDepth: 100
-  paginate: true
+Default configuration will be written into XDG configuration directory
+on ``pancake`` invocation if it's missing.
 
 
 Uncluttering
 ~~~~~~~~~~~~
 
-XSLT can be used to extract useful data from HTML documents. In the
-above sample configuration, ``duckduckgo`` is defined along with an
-URI regex to determine when it should be applied, and the
-corresponding XSLT file should be in
-``~/.config/pancake/unclutter/duckduckgo.xsl``::
+XSLT can be used to extract useful data from HTML documents, and XSLTs
+for a few websites are provided by default. They can be read from
+``unclutter`` subdirectory in either pancake's XDG config directory
+(for custom XSLTs), or a data directory (for predefined XSLTs).
 
-  <?xml version="1.0" encoding="UTF-8"?>
-  <xsl:stylesheet xmlns:xsl="http://www.w3.org/1999/XSL/Transform" version="1.0">
-    <xsl:output method="html" indent="yes"/>
-    <xsl:template match="/">
-      <html>
-        <body>
-          DuckDuckGo
-          <xsl:for-each select="//tr[not(@class) or @class!='result-sponsored']">
-            <xsl:for-each select="td/a[@class='result-link']">
-              <br />
-              <br />
-              <a href="{@href}">
-                <xsl:value-of select="." />
-              </a>
-            </xsl:for-each>
-            <xsl:for-each select="td[@class='result-snippet']">
-              <br />
-              <xsl:value-of select="." />
-            </xsl:for-each>
-          </xsl:for-each>
-        </body>
-      </html>
-    </xsl:template>
-  </xsl:stylesheet>
-
-Uncluttering configurations for a few more websites can be found at
-<https://github.com/defanor/dotfiles/tree/master/.config/pancake>.
 
 Screenshots
 -----------

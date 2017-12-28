@@ -21,6 +21,7 @@ extra-source-files:  ChangeLog.md
                    , pancake.1
                    , Makefile
                    , deb/DEBIAN/control
+data-files:          unclutter/*.xsl
 cabal-version:       >=1.10
 source-repository head
   type:     git
