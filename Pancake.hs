@@ -21,7 +21,7 @@ Maintainer  :  defanor <defanor@uberspace.net>
 Stability   :  unstable
 Portability :  non-portable (uses GHC extensions)
 
-A CLI\/Emacs web\/gopher\/file browser inspired by LMB.
+A CLI\/Emacs web\/gopher\/file browser.
 
 -}
 
@@ -371,9 +371,9 @@ command Redisplay = do
 
 
 -- | Reads commands, runs them with 'command'.
-eventLoop :: forall m. HL.MonadException m => HL.InputT (StateT LoopState m) ()
+eventLoop :: HL.MonadException m => HL.InputT (StateT LoopState m) ()
 eventLoop = do
-  st <- lift $ get
+  st <- lift get
   c <- HL.handleInterrupt (pure Interrupt) $
     maybe Quit (parseCommand (conf st))
     <$> HL.withInterrupt (HL.getInputLine "")
@@ -386,7 +386,7 @@ eventLoop = do
 historyURIs :: Pancake [String]
 historyURIs = do
   hist <- history <$> get
-  pure $ map ((\u -> uriToString id u "") . hURI) $ fst hist ++ snd hist
+  pure $ map ((\u -> uriToString id u "") . hURI) $ uncurry (++) hist
 
 -- | An input completion function.
 complete :: HL.MonadException m => HL.CompletionFunc (StateT LoopState m)
