@@ -11,9 +11,9 @@ bin:
 	cabal configure --prefix=/usr/local
 	cabal build
 	cabal copy --destdir=${NAME}-bin
-	tar -cz -f ${NAME}-bin.tgz -P ${NAME}-bin
+	tar -cJ -f ${NAME}-bin.tar.xz -P ${NAME}-bin
 
 clean:
-	rm -rf ${NAME}.deb ${NAME}-bin.tgz ${NAME}-bin/ deb/usr/ dist/
+	rm -rf ${NAME}.deb ${NAME}-bin.tar.xz ${NAME}-bin/ deb/usr/ dist/
 
 .PHONY: deb bin clean
