@@ -450,14 +450,18 @@ a version that doesn't do that."
   (interactive)
   (let ((next (next-button (point))))
     (when next
-      (goto-char next))))
+      (goto-char next)
+      (let ((message-log-max nil))
+        (message "%s" (pancake-uri-at-point))))))
 
 (defun pancake-previous-button ()
   "Moves cursor to the previous button."
   (interactive)
   (let ((prev (previous-button (point))))
     (when prev
-      (goto-char prev))))
+      (goto-char prev)
+      (let ((message-log-max nil))
+        (message "%s" (pancake-uri-at-point))))))
 
 (defun pancake-previous-heading ()
   "Moves cursor to the previous heading."
