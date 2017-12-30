@@ -1,5 +1,16 @@
 # Revision history for pancake
 
+## 0.1.9 -- 2017-12-30
+
+* New features:
+  * Position retention on reload, redisplay, and history navigation.
+  * Use of Haskeline with history-based URI completion.
+  * Partial (and optional) line wrapping delegation to Emacs.
+  * `pancake-uri-at-point' command.
+* A few uncluttering XSLTs are included into the distribution.
+* Other minor improvements.
+
+
 ## 0.1.8 -- 2017-12-19
 
 * XSLT-based web page transformation (uncluttering) support is
