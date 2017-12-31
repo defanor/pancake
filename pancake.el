@@ -169,10 +169,10 @@
       (read-only-mode 1))))
 
 ;;;###autoload
-(defun pancake (&optional url new-session)
-  "Browse an URL with pancake, suitable for setting as
-`browse-url-browser-function'. Or simply display a pancake buffer
-if no URL is provided."
+(defun pancake (&optional command new-session)
+  "Execute a pancake COMMAND (which may be an URL), suitable for
+setting as `browse-url-browser-function'. Or simply display a
+pancake buffer if no command is provided."
   (interactive)
   (when (or new-session (not (consp pancake-buffers)))
     (pancake-new))
@@ -181,7 +181,7 @@ if no URL is provided."
                     (current-buffer)
                   (car pancake-buffers))))
     (with-current-buffer buffer
-      (when url (pancake-process-send url))
+      (when command (pancake-process-send command))
       (display-buffer (current-buffer)))))
 
 (defun pancake-goto-line (&optional line)
