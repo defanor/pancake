@@ -212,11 +212,17 @@ kill ring when called interactively."
     uri))
 
 (defun pancake-button-action (button)
-  "An action to be invoked on button activation."
+  "An action to be invoked on button activation: follows
+#fragment links in pancake, opens other links with `browse-url',
+and in a new session if `current-prefix-arg' is non-nil."
   (let ((pancake-uri (button-get button 'pancake-link)))
-    (if (and pancake-uri (string-prefix-p "#" pancake-uri))
-      (pancake pancake-uri)
-   (funcall 'browse-url (button-get button 'pancake-absolute-uri)))))
+    (if (and pancake-uri
+             (string-prefix-p "#" pancake-uri)
+             (not current-prefix-arg))
+        (pancake pancake-uri)
+      (funcall 'browse-url
+               (button-get button 'pancake-absolute-uri)
+               current-prefix-arg))))
 
 (defun pancake-print-elem (element)
   "Translate ELEMENT into a string."
