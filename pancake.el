@@ -1,6 +1,6 @@
 ;;; pancake.el --- Pancake browser interface -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2017 defanor
+;; Copyright (C) 2017-2018 defanor
 
 ;; Author: defanor <defanor@uberspace.net>
 ;; Maintainer: defanor <defanor@uberspace.net>
