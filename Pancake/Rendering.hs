@@ -554,6 +554,7 @@ isList _ = False
 skipBefore :: P.Block -> Bool
 skipBefore P.Header {} = True
 skipBefore P.Para {} = True
+skipBefore P.BlockQuote {} = True
 skipBefore (P.Div _ (b:_)) = skipBefore b
 skipBefore _ = False
 
@@ -561,6 +562,7 @@ skipBefore _ = False
 skipAfter :: P.Block -> Bool
 skipAfter P.Header {} = True
 skipAfter P.Para {} = True
+skipAfter P.BlockQuote {} = True
 skipAfter (P.Div _ bs@(_:_)) = skipAfter $ last bs
 skipAfter b = isList b
 
