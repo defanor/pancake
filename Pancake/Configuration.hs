@@ -118,7 +118,7 @@ instance Default Config where
       , ("github", "^https://github\\.com/")]
     }
     where
-      curl = "curl --compressed -4 -L " ++
+      curl = "curl -A \"pancake/${PANCAKE}\" --compressed -4 -L " ++
         "-w \"\n-pancake-\nuri: %{url_effective}\ntype: %{content_type}\n\" "
 
 -- | Loads configuration from a given 'FilePath', or from an XDG
