@@ -102,6 +102,7 @@ instance Default Config where
       , ("wt", "https://en.m.wiktionary.org/w/index.php?search=")
       , ("g", "https://m.gutenberg.org/ebooks/search.mobile/?query=")
       , ("xiph", "http://dir.xiph.org/search?search=")
+      , ("cs", "http://citeseerx.ist.psu.edu/search?q=")
       , ("gp", "gopher://gopherpedia.com:70/7/lookup?")
       , ("vs", "gopher://gopher.floodgap.com/7/v2/vs?")
       , ("wa", "web-archive:///?url=")]
