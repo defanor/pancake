@@ -52,6 +52,7 @@ import Data.Version
 import System.Console.GetOpt
 import Text.Regex.TDFA
 import qualified System.Console.Haskeline as HL
+import Control.Concurrent.STM.TVar
 
 import Pancake.Common
 import Pancake.Configuration
@@ -81,6 +82,7 @@ data LoopState = LS { history :: Sliding HistoryEntry
                     , interrupted :: Bool
                     , unclutterRegexps :: [(Regex, String)]
                     , columns :: Maybe Int
+                    , rdfCache :: TVar (M.Map String String)
                     }
 
 -- | Main event loop's type.
@@ -111,25 +113,20 @@ updateConfig mp = do
   u <- prepareUnclutter c
   modify $ \s -> s { conf = c, unclutterRegexps = u }
 
--- | A wrapper around 'retrieve' that adjusts the URI.
+-- | A wrapper around 'retrieve''.
 loadRaw :: URI -> Pancake (URI, Maybe (BS.ByteString, Maybe URI, Maybe String))
 loadRaw rawURI = do
   st <- get
-  let ddg = isInfixOf "/l/?kh=-1&uddg=" $ uriToString id rawURI ""
-      adjustedURI = case (ddg, uriIsAbsolute rawURI, history st) of
+  let adjustedURI
         -- fix DDG links (that's rather hacky, todo: improve)
-        (True, _, _) -> fromMaybe rawURI $
+        | isInfixOf "/l/?kh=-1&uddg=" $ uriToString id rawURI "" =
+          fromMaybe rawURI $
           parseAbsoluteURI (unEscapeString $ drop 12 (uriQuery rawURI))
-        -- handle relative URIs
-        (_, False, (h:_, _)) -> relativeTo rawURI (hURI h)
-        _ -> rawURI
-      uScheme = case uriScheme adjustedURI of
-        [] -> "unknown"
-        s -> init s
-      cmd = fromMaybe (defaultCommand $ conf st) $
-        M.lookup uScheme (commands $ conf st)
-  doc <- liftIO $ retrieve cmd adjustedURI
-  pure (adjustedURI, doc)
+        | otherwise = rawURI
+      currentURI = case history st of
+        (h:_, _) -> pure (hURI h)
+        _ -> mzero
+  retrieve' (conf st) False currentURI adjustedURI
 
 -- | Decides what to do with a given URI; either returns a document or
 -- runs an external viewer. Used by both 'GoTo' and 'Reload'.
@@ -153,7 +150,7 @@ loadDocument sType rawURI = do
       case M.lookup ext (externalViewers $ conf st) of
         Nothing -> do
           uDoc <- tryUnclutter (unclutterRegexps st) effectiveURI rawDoc
-          doc <- readDoc uDoc fType effectiveURI
+          doc <- readDoc (conf st) (rdfCache st) uDoc fType effectiveURI
           case doc of
             Left err -> do
               putErrLn $ show err
@@ -246,7 +243,7 @@ command (Save (RURI uri') p) = do
           remoteURIStr = uriToString id remoteURI ""
           remoteFileName' = takeFileName $ uriPath remoteURI
           remoteFileName = if remoteFileName' `elem` [".", "..", ""]
-                           then map escapeURI remoteURIStr
+                           then escapeURI remoteURI
                            else remoteFileName'
           targetFileName = fromMaybe remoteFileName mTargetName
           targetPath = targetDir </> targetFileName
@@ -260,10 +257,6 @@ command (Save (RURI uri') p) = do
                       , encodeSexpStr $ uriToString id uri' ""
                       , encodeSexpStr targetPath]
           putErrLn $ unwords ["Saved", remoteURIStr, "as", targetPath]
-  where
-    escapeURI c
-      | isPathSeparator c = '-'
-      | otherwise = c
 command (Save (RNumber i) p) = do
   st <- get
   if length (rLinks $ rendered st) > i
@@ -347,10 +340,7 @@ command ShowCurrent = do
 command (Shortcut u q) = command . GoTo Nothing . RURI . fromJust . parseURI $
   u ++ escapeURIString isUnreserved q
 command (LoadConfig p) = updateConfig p
-command Quit = liftIO $ do
-  dir <- getXdgDirectory XdgCache "pancake"
-  exists <- doesDirectoryExist dir
-  when exists $ removeDirectoryRecursive dir
+command Quit = pure ()
 command Interrupt =
   putErrLn "Received SIGINT. Interrupt twice in a row to quit."
 command (SetWidth w) = modify $ \s -> s { columns = w }
@@ -441,6 +431,7 @@ main = do
                        >>= \st -> command (parseCommand (conf st) (unwords cmd))
             dir <- getXdgDirectory XdgConfig "pancake"
             let hfn = dir </> "command_history"
+            rdfc <- newTVarIO M.empty
             _ <- runStateT
                  (HL.runInputT
                   (HL.setComplete complete HL.defaultSettings)
@@ -457,6 +448,7 @@ main = do
                     , interrupted = False
                     , unclutterRegexps = []
                     , columns = Nothing
+                    , rdfCache = rdfc
                     }
             pure ()
   run

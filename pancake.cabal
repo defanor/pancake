@@ -1,11 +1,10 @@
 name:                pancake
 version:             0.1.9
-synopsis:            A CLI web/gopher/file browser
-description:         Pancake is a CLI web/gopher/file browser inspired
-                     by Line Mode Browser. It relies on pandoc for
-                     parsing, on curl and other external applications
-                     for data loading, on emacs and other applications
-                     to provide user interfaces.
+synopsis:            A CLI/Emacs web/gopher/file browser
+description:         Pancake is a CLI/Emacs web browser. It relies on
+                     pandoc for parsing, on curl and other external
+                     applications for data loading, on emacs and other
+                     applications to provide user interfaces.
 tested-with:         GHC == 8.0.1, GHC == 8.0.2, GHC == 8.2.1, GHC == 8.2.2
 license:             GPL-3
 license-file:        LICENSE
@@ -50,7 +49,9 @@ executable pancake
                      , data-default >= 0.7.1.1 && < 1
                      , directory >= 1.2.6.2 && < 2
                      , filepath >= 1.4.1.0 && < 2
+                     , haskeline >= 0.7 && < 1
                      , hxt >= 9.3.1 && < 10
+                     , hxt-xpath >= 9.1.2.2
                      , hxt-xslt >= 9.1 && < 10
                      , mtl >= 2.2.1 && < 3
                      , network-uri >= 2.6.1.0 && < 3
@@ -58,13 +59,14 @@ executable pancake
                      , pandoc-types >= 1.17.0.5 && < 2
                      , parsec >= 3.1.11 && < 4
                      , process >= 1.6 && < 2
+                     , rdf4h >= 3 && < 4
                      , regex-base >= 0.93.2 && < 1
                      , regex-tdfa >= 1.2.2 && < 2
+                     , stm >= 2.4 && < 3
                      , terminfo >= 0.4.0.2 && < 1
                      , text >= 1.2.2.2 && < 2
                      , unix >= 2.7.2.0 && < 3
                      , yaml >= 0.8.23.3 && < 1
-                     , haskeline >= 0.7 && < 1
   -- hs-source-dirs:
   default-language:    Haskell2010
   ghc-options:         -Wall

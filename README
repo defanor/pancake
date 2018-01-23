@@ -5,9 +5,9 @@ Pancake
 This is a CLI/Emacs web/gopher/file browser.
 
 It utilizes pandoc and external downloaders such as curl, adding
-support for Gopher directories and plain text files, and invoking
-external applications (e.g., image and PDF viewers) depending on its
-configuration.
+support for Gopher directories, plain text files, and RDF, and
+invoking external applications (e.g., image and PDF viewers) depending
+on its configuration.
 
 User interaction capabilities are rather basic, as it is intended to
 be combined with software that provides better user interfaces – such
@@ -56,7 +56,7 @@ specific websites, e.g. webcomics, and perhaps specific images only.
 Commands
 --------
 
-:quit or EOF: quit pancake, cleaning the cache
+:quit or EOF: quit pancake
 :[: back
 :]: forward
 :load config[ <path>]: load configuration from a specified file or

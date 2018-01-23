@@ -24,9 +24,11 @@ Portability :  portable
 Utility functions.
 -}
 
-module Pancake.Common ( putErrLn ) where
+module Pancake.Common ( putErrLn, escapeURI ) where
 import System.IO
 import Control.Monad.IO.Class
+import Network.URI
+import System.FilePath
 
 
 -- | Prints a line into stderr.
@@ -34,3 +36,10 @@ putErrLn :: MonadIO m => String -> m ()
 putErrLn s = liftIO $ do
   hPutStrLn stderr s
   hFlush stderr
+
+-- | Escapes an URI for use as a file name.
+escapeURI :: URI -> FilePath
+escapeURI u = map escapeChar $ uriToString id u ""
+  where escapeChar c
+          | isPathSeparator c = '-'
+          | otherwise = c

@@ -27,6 +27,7 @@ Document retrieval and parsing.
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Pancake.Reading ( retrieve
+                       , retrieve'
                        , readDoc
                        ) where
 
@@ -49,9 +50,15 @@ import Text.Parsec hiding ((<|>))
 import Text.Parsec.ByteString
 import Data.Maybe
 import Data.Version
+import qualified Data.Map as M
+import Control.Monad.IO.Class
+import System.Directory
+import Control.Concurrent.STM.TVar
 
 import Text.Pandoc.Readers.Plain
 import Text.Pandoc.Readers.Gopher
+import Text.Pandoc.Readers.RDF
+import Pancake.Configuration
 import Pancake.Common
 import Paths_pancake
 
@@ -79,6 +86,46 @@ pMeta = do
 pWithMeta :: Parser (BS.ByteString, (Maybe URI, Maybe String))
 pWithMeta = (,) . BS.pack <$> manyTill anyToken (try $ lookAhead pMeta)
             <*> pMeta
+
+-- | A wrapper around 'retrieve' that adjusts the URI.
+retrieve' :: MonadIO m
+          => Config
+          -- ^ Configuration.
+          -> Bool
+          -- ^ Cache.
+          -> Maybe URI
+          -- ^ Current URI.
+          -> URI
+          -- ^ Target URI.
+          -> m (URI, Maybe (BS.ByteString, Maybe URI, Maybe String))
+retrieve' c cache cu tu' = do
+  let tu = tu' { uriFragment = "" }
+      adjustedURI = case (cu, uriIsAbsolute tu) of
+        (Just cu', False) -> relativeTo tu cu'
+        _ -> tu
+      uScheme = case uriScheme adjustedURI of
+        [] -> "unknown"
+        s -> init s
+      cmd = fromMaybe (defaultCommand c) $ M.lookup uScheme (commands c)
+  doc <- liftIO $ if cache
+    then do
+    cacheDir <- getXdgDirectory XdgCache "pancake"
+    createDirectoryIfMissing True cacheDir
+    let fp = cacheDir </> escapeURI tu
+    exists <- doesFileExist fp
+    if exists
+      then do
+      fc <- BS.readFile fp
+      pure $ Just (fc, Nothing, Nothing)
+      else do
+      d <- retrieve cmd adjustedURI
+      case d of
+        (Just (fc, _, _)) -> BS.writeFile fp fc
+        _ -> pure ()
+      pure d
+    else retrieve cmd adjustedURI
+  pure (adjustedURI, doc)
+
 
 -- | Retrieves a document. Prints an error message and returns an
 -- empty string on failure.
@@ -152,16 +199,21 @@ pEmacsMode = do
 
 -- | Parses a document into a Pandoc structure. The parser is chosen
 -- depending on the document type (if one is provided) or its URI.
-readDoc :: BS.ByteString
+readDoc :: MonadIO m
+        => Config
+        -- ^ Configuration.
+        -> TVar (M.Map String String)
+        -- ^ RDF cache
+        -> BS.ByteString
         -- ^ Raw document data.
         -> Maybe String
         -- ^ Document type.
         -> URI
         -- ^ Document URI.
-        -> IO (Either P.PandocError P.Pandoc)
+        -> m (Either P.PandocError P.Pandoc)
         -- ^ A parsed document.
-readDoc out dt uri = do
-  term <- setupTermFromEnv
+readDoc c rdfc out dt uri = do
+  term <- liftIO setupTermFromEnv
   let (reader, exts) = either (const plain) id $
         maybe (Left "no type suggestions") byExtension dt
         <|> case (uriScheme uri, map toLower $ takeExtension $ uriPath uri) of
@@ -185,7 +237,7 @@ readDoc out dt uri = do
         (parse pEmacsMode (uriToString id uri "") out)
       cols = fromMaybe 80 $ getCapability term termColumns
       opts = def { P.readerColumns = cols, P.readerExtensions = exts }
-  case reader of
+  liftIO $ case reader of
     P.TextReader f -> case decodeUtf8' out of
       Left err -> do
         putErrLn $ show err
@@ -197,6 +249,8 @@ readDoc out dt uri = do
     html = P.getReader "html"
     plain = (P.TextReader . const $ readPlain, P.emptyExtensions)
     gopher = pure (P.TextReader . const $ readGopher, P.emptyExtensions)
+    rdf = ( P.TextReader . const $ readRDF rdfc uri retrieveRelative
+          , P.emptyExtensions)
     byExtension' ext = byExtension $ dropWhile (== '.') ext
     byExtension "md" = P.getReader "markdown"
     byExtension "htm" = html
@@ -204,4 +258,13 @@ readDoc out dt uri = do
     byExtension "tex" = P.getReader "latex"
     byExtension "txt" = pure plain
     byExtension "plain" = pure plain
+    byExtension "rdf" = pure rdf
+    byExtension "turtle" = pure rdf
     byExtension ext = P.getReader ext
+    retrieveRelative u = do
+      x <- retrieve' c True (Just uri) u
+      case x of
+        (_, Just (bs, _, _)) -> case decodeUtf8' bs of
+          Right t -> pure t
+          _ -> fail "Failed to decode as UTF-8"
+        _ -> fail "Failed to retrieve a document"
