@@ -69,6 +69,9 @@ data Config = Config { commands :: M.Map String String
                      -- inside divs.
                      , unclutter :: M.Map String String
                      -- ^ XSLT file and URI regex.
+                     , pandocTimeout :: Int
+                     -- ^ Maximum amount of time (in seconds) allowed
+                     -- for document parsing.
                      } deriving (Generic, Show, Eq)
 
 -- | For configuration parsing.
@@ -117,6 +120,7 @@ instance Default Config where
          "^https://news\\.ycombinator\\.com/((news|show|ask).*)?$")
       , ("mediawiki", "^https://en\\.(m.)?(wiktionary|wikipedia)\\.org/wiki/")
       , ("github", "^https://github\\.com/")]
+    , pandocTimeout = 60
     }
     where
       curl = "curl -A \"pancake/${PANCAKE}\" --compressed -4 -L " ++

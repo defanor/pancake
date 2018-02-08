@@ -54,6 +54,7 @@ import qualified Data.Map as M
 import Control.Monad.IO.Class
 import System.Directory
 import Control.Concurrent.STM.TVar
+import System.Timeout
 
 import Text.Pandoc.Readers.Plain
 import Text.Pandoc.Readers.Gopher
@@ -237,13 +238,14 @@ readDoc c rdfc out dt uri = do
         (parse pEmacsMode (uriToString id uri "") out)
       cols = fromMaybe 80 $ getCapability term termColumns
       opts = def { P.readerColumns = cols, P.readerExtensions = exts }
-  liftIO $ case reader of
+  r <- liftIO $ timeout (pandocTimeout c * 1000000) $ case reader of
     P.TextReader f -> case decodeUtf8' out of
       Left err -> do
         putErrLn $ show err
         P.runIO $ f opts $ decodeLatin1 out
       Right r -> P.runIO $ f opts r
     P.ByteStringReader f -> P.runIO $ f opts $ BL.fromStrict out
+  pure $ fromMaybe (Left (P.PandocSomeError "Timed out.")) r
   where
     http ext = byExtension' ext <|> html
     html = P.getReader "html"
