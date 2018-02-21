@@ -53,7 +53,6 @@ import Data.Version
 import qualified Data.Map as M
 import Control.Monad.IO.Class
 import System.Directory
-import Control.Concurrent.STM.TVar
 import System.Timeout
 
 import Text.Pandoc.Readers.Plain
@@ -203,8 +202,6 @@ pEmacsMode = do
 readDoc :: MonadIO m
         => Config
         -- ^ Configuration.
-        -> TVar (M.Map String String)
-        -- ^ RDF cache
         -> BS.ByteString
         -- ^ Raw document data.
         -> Maybe String
@@ -213,7 +210,7 @@ readDoc :: MonadIO m
         -- ^ Document URI.
         -> m (Either P.PandocError P.Pandoc)
         -- ^ A parsed document.
-readDoc c rdfc out dt uri = do
+readDoc c out dt uri = do
   term <- liftIO setupTermFromEnv
   let (reader, exts) = either (const plain) id $
         maybe (Left "no type suggestions") byExtension dt
@@ -251,7 +248,7 @@ readDoc c rdfc out dt uri = do
     html = P.getReader "html"
     plain = (P.TextReader . const $ readPlain, P.emptyExtensions)
     gopher = pure (P.TextReader . const $ readGopher, P.emptyExtensions)
-    rdf = ( P.TextReader . const $ readRDF rdfc uri retrieveRelative
+    rdf = ( P.TextReader . const $ readRDF uri retrieveRelative
           , P.emptyExtensions)
     byExtension' ext = byExtension $ dropWhile (== '.') ext
     byExtension "md" = P.getReader "markdown"

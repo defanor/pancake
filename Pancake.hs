@@ -52,7 +52,6 @@ import Data.Version
 import System.Console.GetOpt
 import Text.Regex.TDFA
 import qualified System.Console.Haskeline as HL
-import Control.Concurrent.STM.TVar
 
 import Pancake.Common
 import Pancake.Configuration
@@ -82,7 +81,6 @@ data LoopState = LS { history :: Sliding HistoryEntry
                     , interrupted :: Bool
                     , unclutterRegexps :: [(Regex, String)]
                     , columns :: Maybe Int
-                    , rdfCache :: TVar (M.Map String String)
                     }
 
 -- | Main event loop's type.
@@ -150,7 +148,7 @@ loadDocument sType rawURI = do
       case M.lookup ext (externalViewers $ conf st) of
         Nothing -> do
           uDoc <- tryUnclutter (unclutterRegexps st) effectiveURI rawDoc
-          doc <- readDoc (conf st) (rdfCache st) uDoc fType effectiveURI
+          doc <- readDoc (conf st) uDoc fType effectiveURI
           case doc of
             Left err -> do
               putErrLn $ show err
@@ -431,7 +429,6 @@ main = do
                        >>= \st -> command (parseCommand (conf st) (unwords cmd))
             dir <- getXdgDirectory XdgConfig "pancake"
             let hfn = dir </> "command_history"
-            rdfc <- newTVarIO M.empty
             _ <- runStateT
                  (HL.runInputT
                   (HL.setComplete complete HL.defaultSettings)
@@ -448,7 +445,6 @@ main = do
                     , interrupted = False
                     , unclutterRegexps = []
                     , columns = Nothing
-                    , rdfCache = rdfc
                     }
             pure ()
   run
