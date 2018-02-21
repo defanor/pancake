@@ -46,10 +46,7 @@ import Text.Pandoc.Error (PandocError(..))
 import Control.Exception
 import System.Directory
 
-import Foreign
-import Redland.MidLevel
-import Redland.LowLevel
-import Redland.Util
+import Redland
 
 
 detectAlternateVersion :: T.Text -> IO (Maybe URI)
@@ -89,32 +86,31 @@ readRDF bu rf t = do
     parseDoc = Right . Pandoc mempty . pure . LineBlock <$> do
       withWSMU "memory" [] "temporary" "" (uriToString id bu "") $
         \world _ model uri -> do
-          tryParseStringIntoModel world ["turtle", "rdfxml", "n-triples"]
-            model uri (T.unpack t)
-          withQuery world model "sparql" "SELECT ?s ?p ?o WHERE { ?s ?p ?o }"
-            (Just uri) $ \results -> do
-            cacheDir <- getXdgDirectory XdgCache "pancake"
-            createDirectoryIfMissing True cacheDir
-            withWSMU "hashes" [("hash-type", "bdb"), ("dir", cacheDir)]
-              "rdf-cache" "" (uriToString id bu "") $ \world' _ model' uri' ->
-              mapM (printTriple (world', model', uri')) results
-    -- todo: should probably use statements instead, need to complete
-    -- that part of the bindings.
+          guessingParseStringIntoModel world model uri (T.unpack t)
+          withStatements world model (Triple Nothing Nothing Nothing) $
+            \triples -> do
+              cacheDir <- getXdgDirectory XdgCache "pancake"
+              createDirectoryIfMissing True cacheDir
+              withWSMU "hashes" [("hash-type", "bdb"), ("dir", cacheDir)]
+                "rdf-cache" "" (uriToString id bu "") $ \world' _ model' uri' ->
+                mapM (printTriple (world', model', uri')) triples
     printTriple :: ( ForeignPtr RedlandWorld
                    , ForeignPtr RedlandModel
                    , ForeignPtr RedlandURI)
-                -> [(String, Node)]
+                -> Triple
                 -> IO [Inline]
-    printTriple wmu l =
-      concat . intersperse [Space] <$> mapM (printNode wmu . snd) l
+    printTriple wmu triple =
+      concat . intersperse [Space] <$>
+      mapM (printNode wmu) [subject triple, predicate triple, object triple]
     printNode :: ( ForeignPtr RedlandWorld
                  , ForeignPtr RedlandModel
                  , ForeignPtr RedlandURI)
-              -> Node
+              -> Maybe Node
               -> IO [Inline]
-    printNode _ (BlankNode s) = pure [Str s]
-    printNode _ (LiteralNode s) = pure [Str s]
-    printNode (w, m, u) (ResourceNode s) =
+    printNode _ Nothing = pure [Str "-"]
+    printNode _ (Just (BlankNode s)) = pure [Str s]
+    printNode _ (Just (LiteralNode s)) = pure [Str s]
+    printNode (w, m, u) (Just (ResourceNode s)) =
       let su = showURI s
           q = "SELECT ?label WHERE { <" ++ s ++
             "> <http://www.w3.org/2000/01/rdf-schema#label> ?label }"
