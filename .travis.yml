@@ -14,3 +14,7 @@ install:
   # Pandoc build takes too much time and memory for travis defaults
   # with cabal defaults.
   - travis_wait 60 cabal install --only-dependencies --enable-tests -O0
+
+before_install:
+  - sudo apt-get -q update
+  - sudo apt-get install -y librdf-dev
