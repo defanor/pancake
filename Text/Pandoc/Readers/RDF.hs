@@ -43,9 +43,11 @@ import Data.Tree.NTree.TypeDefs (NTree(..))
 import Text.XML.HXT.XPath.Arrows (getXPathTreesInDoc)
 import Control.Monad.Error.Class (throwError)
 import Text.Pandoc.Error (PandocError(..))
-import Control.Exception
-import System.Directory
-import Control.Monad
+import Control.Exception (handle)
+import System.Directory ( getXdgDirectory, XdgDirectory(..)
+                        , createDirectoryIfMissing )
+import Control.Monad (zipWithM)
+import Data.Maybe (mapMaybe)
 
 import Redland
 
@@ -70,6 +72,15 @@ showURI bu u = case parseURIReference u of
   Just u' -> uriToString id (relativeFrom u' bu) ""
   Nothing -> u
 
+-- | Extracts literal nodes in English (or without a language
+-- specified).
+enLiteral :: Maybe Node -> Maybe String
+enLiteral (Just (LiteralNode label l)) = case l of
+  Just (LanguageTag "en") -> Just label
+  Just (LanguageTag _) -> Nothing
+  _ -> Just label
+enLiteral _ = Nothing
+
 -- | Reads a node.
 readNode :: URI
           -- ^ base URI
@@ -80,7 +91,12 @@ readNode :: URI
           -> IO [Inline]
 readNode _ _ Nothing _ = pure [Str "-"]
 readNode _ _ (Just (BlankNode s)) _ = pure [Str s]
-readNode _ _ (Just (LiteralNode s)) _ = pure [Str s]
+readNode _ _ (Just (LiteralNode v t)) _ =
+  let attr = case t of
+        Just (LanguageTag l) -> [Space, Str "@", Str l]
+        Just (XMLSchema s) -> [Space, Str "^^", Str s]
+        _ -> []
+  in pure $ Str v : attr
 readNode bu (w, m) n@(Just (ResourceNode s)) isSubject = do
   let su = showURI bu s
       identifier = case (isSubject, su) of
@@ -89,8 +105,8 @@ readNode bu (w, m) n@(Just (ResourceNode s)) isSubject = do
       labelURI = "http://www.w3.org/2000/01/rdf-schema#label"
   l <- withStatements w m
     (Triple n (Just (ResourceNode labelURI)) Nothing) $ \r ->
-    case r of
-      (Triple _ _ (Just (LiteralNode label)):_) -> pure label
+    case mapMaybe (enLiteral . object) r of
+      (label:_) -> pure label
       _ -> pure su
   pure [Link (identifier, [], []) [] (su, l)]
 
