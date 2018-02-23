@@ -1,5 +1,15 @@
 # Revision history for pancake
 
+## 0.1.10 -- 2018-02-23
+
+* RDF support.
+* Minor improvements, including:
+  * URIs are shown in Emacs on link navigation.
+  * curl user-agent gets set to pancake by default.
+  * C-u RET would open links in a new session.
+  * Timeouts for pandoc parsing are introduced.
+
+
 ## 0.1.9 -- 2017-12-30
 
 * New features:

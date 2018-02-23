@@ -1,5 +1,5 @@
 name:                pancake
-version:             0.1.9
+version:             0.1.10
 synopsis:            A CLI/Emacs web/gopher/file browser
 description:         Pancake is a CLI/Emacs web browser. It relies on
                      pandoc for parsing, on curl and other external
