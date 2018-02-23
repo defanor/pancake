@@ -10,5 +10,5 @@ Architecture: amd64
 Section: web
 Priority: extra
 Homepage: https://defanor.uberspace.net/projects/pancake/
-Depends: libtinfo5, zlib1g, libc6, libgmp10, libffi6
+Depends: libtinfo5, zlib1g, libc6, libgmp10, libffi6, librdf
 Recommends: curl
