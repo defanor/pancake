@@ -45,6 +45,7 @@ import Control.Monad.Error.Class (throwError)
 import Text.Pandoc.Error (PandocError(..))
 import Control.Exception
 import System.Directory
+import Control.Monad
 
 import Redland
 
@@ -74,19 +75,24 @@ readNode :: URI
           -- ^ base URI
           -> ( ForeignPtr RedlandWorld, ForeignPtr RedlandModel)
           -> Maybe Node
+          -> Bool
+          -- ^ whether the node is a subject
           -> IO [Inline]
-readNode _ _ Nothing = pure [Str "-"]
-readNode _ _ (Just (BlankNode s)) = pure [Str s]
-readNode _ _ (Just (LiteralNode s)) = pure [Str s]
-readNode bu (w, m) n@(Just (ResourceNode s)) = do
+readNode _ _ Nothing _ = pure [Str "-"]
+readNode _ _ (Just (BlankNode s)) _ = pure [Str s]
+readNode _ _ (Just (LiteralNode s)) _ = pure [Str s]
+readNode bu (w, m) n@(Just (ResourceNode s)) isSubject = do
   let su = showURI bu s
+      identifier = case (isSubject, su) of
+        (True, '#':rest) -> rest
+        _ -> ""
       labelURI = "http://www.w3.org/2000/01/rdf-schema#label"
   l <- withStatements w m
     (Triple n (Just (ResourceNode labelURI)) Nothing) $ \r ->
     case r of
       (Triple _ _ (Just (LiteralNode label)):_) -> pure label
       _ -> pure su
-  pure [Link (su, [], []) [] (su, l)]
+  pure [Link (identifier, [], []) [] (su, l)]
 
 -- | Prepares triples for conversion into Pandoc: excludes repeating
 -- subjects and predicates.
@@ -143,7 +149,8 @@ readRDF bu rf t = do
                 -> IO [Inline]
     readTriple wm triple =
       concat . intersperse [Space] <$>
-      mapM (readNode bu wm) [subject triple, predicate triple, object triple]
+      zipWithM (\f s -> readNode bu wm (f triple) s)
+      [subject, predicate, object] [True, False, False]
 
 -- rdfproc rdf-cache parse http://xmlns.com/foaf/0.1/
 -- rdfproc rdf-cache parse http://www.w3.org/1999/02/22-rdf-syntax-ns
