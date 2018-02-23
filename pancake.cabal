@@ -48,7 +48,6 @@ executable pancake
                      , bytestring >= 0.10.8.1 && < 1
                      , containers >= 0.5.7.1 && < 1
                      , data-default >= 0.7.1.1 && < 1
-                     , deepseq >= 1.4.2.0 && < 2
                      , directory >= 1.2.6.2 && < 2
                      , filepath >= 1.4.1.0 && < 2
                      , haskeline >= 0.7 && < 1
@@ -61,7 +60,7 @@ executable pancake
                      , pandoc-types >= 1.17.0.5 && < 2
                      , parsec >= 3.1.11 && < 4
                      , process >= 1.6 && < 2
-                     , redland >= 0.2 && < 0.3
+                     , redland >= 0.2.0.1 && < 0.3
                      , regex-base >= 0.93.2 && < 1
                      , regex-tdfa >= 1.2.2 && < 2
                      , terminfo >= 0.4.0.2 && < 1

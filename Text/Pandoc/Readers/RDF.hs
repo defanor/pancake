@@ -48,7 +48,6 @@ import System.Directory ( getXdgDirectory, XdgDirectory(..)
                         , createDirectoryIfMissing )
 import Control.Monad (zipWithM)
 import Data.Maybe (mapMaybe)
-import Control.DeepSeq
 
 import Redland
 
@@ -159,8 +158,7 @@ readRDF bu rf t = do
               createDirectoryIfMissing True cacheDir
               withWSMU "hashes" [("hash-type", "bdb"), ("dir", cacheDir)]
                 "rdf-cache" "" (uriToString id bu "") $ \world' _ model' _ -> do
-                r <- mapM (readTriple (world', model')) $ prepareTriples triples
-                r `deepseq` pure r
+                mapM (readTriple (world', model')) $ prepareTriples triples
     readTriple :: ( ForeignPtr RedlandWorld
                    , ForeignPtr RedlandModel)
                 -> Triple
