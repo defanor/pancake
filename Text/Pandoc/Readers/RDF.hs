@@ -48,7 +48,7 @@ import System.Directory
 
 import Redland
 
-
+-- | Detects an alternate "rdf+xml" version of a document.
 detectAlternateVersion :: T.Text -> IO (Maybe URI)
 detectAlternateVersion t = do
   let doc = readString [withParseHTML yes, withWarnings no] (T.unpack t)
@@ -59,7 +59,50 @@ detectAlternateVersion t = do
     [NTree (XText uri) []] -> parseURIReference uri
     _ -> Nothing
 
+-- | Shows an URI, relative to a base URI.
+showURI :: URI
+        -- ^ base URI
+        -> String
+        -- ^ URI to show
+        -> String
+showURI bu u = case parseURIReference u of
+  Just u' -> uriToString id (relativeFrom u' bu) ""
+  Nothing -> u
 
+-- | Reads a node.
+readNode :: URI
+          -- ^ base URI
+          -> ( ForeignPtr RedlandWorld, ForeignPtr RedlandModel)
+          -> Maybe Node
+          -> IO [Inline]
+readNode _ _ Nothing = pure [Str "-"]
+readNode _ _ (Just (BlankNode s)) = pure [Str s]
+readNode _ _ (Just (LiteralNode s)) = pure [Str s]
+readNode bu (w, m) n@(Just (ResourceNode s)) = do
+  let su = showURI bu s
+      labelURI = "http://www.w3.org/2000/01/rdf-schema#label"
+  l <- withStatements w m
+    (Triple n (Just (ResourceNode labelURI)) Nothing) $ \r ->
+    case r of
+      (Triple _ _ (Just (LiteralNode label)):_) -> pure label
+      _ -> pure su
+  pure [Link (su, [], []) [] (su, l)]
+
+-- | Prepares triples for conversion into Pandoc: excludes repeating
+-- subjects and predicates.
+prepareTriples :: [Triple] -> [Triple]
+prepareTriples = prepareTriples' (Triple Nothing Nothing Nothing)
+  where
+    prepareTriples' :: Triple -> [Triple] -> [Triple]
+    prepareTriples' _ [] = []
+    prepareTriples' prev (cur:ts) = cur { subject = changedOnly subject
+                                        , predicate = changedOnly predicate }
+                                    : prepareTriples' cur ts
+      where changedOnly :: (Triple -> Maybe Node) -> Maybe Node
+            changedOnly f | f prev == f cur = Nothing
+                          | otherwise = f cur
+
+-- | Reads an RDF document.
 readRDF :: (MonadIO m, PandocMonad m)
         => URI
         -- ^ Base (source) URI.
@@ -92,38 +135,15 @@ readRDF bu rf t = do
               cacheDir <- getXdgDirectory XdgCache "pancake"
               createDirectoryIfMissing True cacheDir
               withWSMU "hashes" [("hash-type", "bdb"), ("dir", cacheDir)]
-                "rdf-cache" "" (uriToString id bu "") $ \world' _ model' uri' ->
-                mapM (printTriple (world', model', uri')) triples
-    printTriple :: ( ForeignPtr RedlandWorld
-                   , ForeignPtr RedlandModel
-                   , ForeignPtr RedlandURI)
+                "rdf-cache" "" (uriToString id bu "") $ \world' _ model' _ ->
+                mapM (readTriple (world', model')) $ prepareTriples triples
+    readTriple :: ( ForeignPtr RedlandWorld
+                   , ForeignPtr RedlandModel)
                 -> Triple
                 -> IO [Inline]
-    printTriple wmu triple =
+    readTriple wm triple =
       concat . intersperse [Space] <$>
-      mapM (printNode wmu) [subject triple, predicate triple, object triple]
-    printNode :: ( ForeignPtr RedlandWorld
-                 , ForeignPtr RedlandModel
-                 , ForeignPtr RedlandURI)
-              -> Maybe Node
-              -> IO [Inline]
-    printNode _ Nothing = pure [Str "-"]
-    printNode _ (Just (BlankNode s)) = pure [Str s]
-    printNode _ (Just (LiteralNode s)) = pure [Str s]
-    printNode (w, m, u) (Just (ResourceNode s)) =
-      let su = showURI s
-          q = "SELECT ?label WHERE { <" ++ s ++
-            "> <http://www.w3.org/2000/01/rdf-schema#label> ?label }"
-      in do
-        l <- withQuery w m "sparql" q (Just u) $ \r ->
-          case r of
-            ([("label", LiteralNode label)]:_) -> pure label
-            _ -> pure su
-        pure [Link (su, [], []) [] (su, l)]
-    showURI :: String -> String
-    showURI u = case parseURIReference u of
-                  Just u' -> uriToString id (relativeFrom u' bu) ""
-                  Nothing -> u
+      mapM (readNode bu wm) [subject triple, predicate triple, object triple]
 
 -- rdfproc rdf-cache parse http://xmlns.com/foaf/0.1/
 -- rdfproc rdf-cache parse http://www.w3.org/1999/02/22-rdf-syntax-ns
