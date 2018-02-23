@@ -48,6 +48,7 @@ import System.Directory ( getXdgDirectory, XdgDirectory(..)
                         , createDirectoryIfMissing )
 import Control.Monad (zipWithM)
 import Data.Maybe (mapMaybe)
+import Control.DeepSeq
 
 import Redland
 
@@ -157,8 +158,9 @@ readRDF bu rf t = do
               cacheDir <- getXdgDirectory XdgCache "pancake"
               createDirectoryIfMissing True cacheDir
               withWSMU "hashes" [("hash-type", "bdb"), ("dir", cacheDir)]
-                "rdf-cache" "" (uriToString id bu "") $ \world' _ model' _ ->
-                mapM (readTriple (world', model')) $ prepareTriples triples
+                "rdf-cache" "" (uriToString id bu "") $ \world' _ model' _ -> do
+                r <- mapM (readTriple (world', model')) $ prepareTriples triples
+                r `deepseq` pure r
     readTriple :: ( ForeignPtr RedlandWorld
                    , ForeignPtr RedlandModel)
                 -> Triple
@@ -170,3 +172,4 @@ readRDF bu rf t = do
 
 -- rdfproc rdf-cache parse http://xmlns.com/foaf/0.1/
 -- rdfproc rdf-cache parse http://www.w3.org/1999/02/22-rdf-syntax-ns
+-- rdfproc rdf-cache parse http://www.w3.org/2000/01/rdf-schema
