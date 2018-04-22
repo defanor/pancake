@@ -253,6 +253,8 @@ readDoc c out dt uri = do
     byExtension' ext = byExtension $ dropWhile (== '.') ext
     byExtension "md" = P.getReader "markdown"
     byExtension "htm" = html
+    byExtension "xhtml" = html
+    byExtension "xht" = html
     byExtension "ltx" = P.getReader "latex"
     byExtension "tex" = P.getReader "latex"
     byExtension "txt" = pure plain
