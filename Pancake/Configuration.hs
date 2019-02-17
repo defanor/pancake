@@ -106,8 +106,8 @@ instance Default Config where
       , ("g", "https://m.gutenberg.org/ebooks/search.mobile/?query=")
       , ("xiph", "http://dir.xiph.org/search?search=")
       , ("cs", "http://citeseerx.ist.psu.edu/search?q=")
-      , ("gp", "gopher://gopherpedia.com:70/7/lookup?")
-      , ("vs", "gopher://gopher.floodgap.com/7/v2/vs?")
+      , ("gp", "gopher://gopherpedia.com:70/7/lookup%09")
+      , ("vs", "gopher://gopher.floodgap.com/7/v2/vs%09")
       , ("wa", "web-archive:///?url=")]
     , paginate = True
     , historyDepth = 100
