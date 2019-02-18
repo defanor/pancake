@@ -52,6 +52,7 @@ data Command = Quit
              | More
              | GoTo (Maybe String) Reference
              -- ^ Document type, reference
+             | GopherSearch Int String
              | Save Reference (Maybe FilePath)
              | Back
              | Forward
@@ -166,6 +167,16 @@ loadConf = string "load config"
            *> (LoadConfig <$> optionMaybe (space *> many1 anyChar))
            <* eof
 
+gopherSearch :: String -> Parser Command
+gopherSearch digits = do
+  string "gs"
+  space
+  ref <- pNumber digits
+  _ <- space
+  query <- many1 anyChar
+  _ <- eof
+  pure $ GopherSearch ref query
+
 -- | Command parser.
 command :: Config -> Parser Command
 command c =
@@ -181,4 +192,5 @@ command c =
           , setPos <?> "set position"
           , loadConf <?> "load config"
           , goTo <?> "follow uri"
+          , gopherSearch (referenceDigits c) <?> "gopher search"
           ])

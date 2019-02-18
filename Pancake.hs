@@ -283,6 +283,16 @@ command (GoTo t (RNumber i)) = do
   if length (rLinks $ rendered st) > i
     then command (GoTo t $ RURI $ rLinks (rendered st) !! i)
     else putErrLn "No such link"
+command (GopherSearch i q) = do
+  st <- get
+  if length (rLinks $ rendered st) > i
+    then
+    let refURIString = uriToString id (rLinks (rendered st) !! i) ""
+        searchString = refURIString ++ "%09" ++ escapeURIString isUnreserved q
+    in maybe (putErrLn "Failed to compose a valid search URI")
+       (command . GoTo Nothing . RURI)
+       (parseURI searchString)
+    else putErrLn "No such link"
 command Back = do
   st <- get
   case history st of
