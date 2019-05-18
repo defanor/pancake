@@ -7,7 +7,7 @@
         Lobsters
         <xsl:for-each select="//div[@class='details']">
           <p>
-            <xsl:copy-of select="span[@class='link']/a" />
+            <xsl:copy-of select="span/a[@class='u-url']" />
             <br/>
             <xsl:value-of select="div[@class='byline']/span[position()=1]" />
             |
